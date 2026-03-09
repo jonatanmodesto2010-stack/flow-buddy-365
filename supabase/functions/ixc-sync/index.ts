@@ -304,7 +304,6 @@ Deno.serve(async (req) => {
 
       try {
         const { registros, total } = await ixcRequest(int.api_url, token, 'fn_areceber', 1, 5);
-        // Return all fields from the first few records
         return new Response(JSON.stringify({
           endpoint: 'fn_areceber',
           total_records: total,
@@ -317,6 +316,148 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Diagnose specific client boletos in IXC
+    if (action === 'diagnose_client') {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supa = createClient(supabaseUrl, supabaseKey);
+      const org_id = body.organization_id;
+      const clientIxcId = String(body.client_ixc_id || '');
+      
+      if (!clientIxcId) {
+        return new Response(JSON.stringify({ error: 'client_ixc_id is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const { data: int } = await supa.from('organization_integrations').select('api_url, api_token').eq('organization_id', org_id).eq('integration_type', 'ixc').single();
+      if (!int) return new Response(JSON.stringify({ error: 'No integration found' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      const token = encodeIxcToken(int.api_token);
+
+      const results: any = { client_ixc_id: clientIxcId };
+
+      // 1. Search fn_areceber by id_cliente
+      try {
+        const url = `${int.api_url.replace(/\/$/, '')}/fn_areceber`;
+        const requestBody = {
+          qtype: 'id_cliente',
+          query: clientIxcId,
+          oper: '=',
+          page: '1',
+          rp: '100',
+          sortname: 'id',
+          sortorder: 'asc',
+        };
+        
+        console.log(`[diagnose] Request to fn_areceber:`, JSON.stringify(requestBody));
+        
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Basic ${token}`,
+            'ixcsoft': 'listar',
+          },
+          body: JSON.stringify(requestBody),
+        });
+        
+        const rawText = await res.text();
+        console.log(`[diagnose] fn_areceber response status: ${res.status}, body length: ${rawText.length}`);
+        
+        let parsed: any;
+        try { parsed = JSON.parse(rawText); } catch { parsed = { raw: rawText.substring(0, 2000) }; }
+        
+        results.fn_areceber_by_id_cliente = {
+          request: requestBody,
+          status: res.status,
+          total: parsed.total || 0,
+          records_count: parsed.registros?.length || 0,
+          sample_records: (parsed.registros || []).slice(0, 5).map((r: any) => ({
+            id: r.id,
+            id_cliente: r.id_cliente,
+            id_contrato: r.id_contrato,
+            valor: r.valor,
+            valor_aberto: r.valor_aberto,
+            data_vencimento: r.data_vencimento,
+            status: r.status,
+            liquidado: r.liquidado,
+            data_emissao: r.data_emissao,
+            tipo_cobranca: r.tipo_cobranca,
+          })),
+        };
+      } catch (e: any) {
+        results.fn_areceber_by_id_cliente = { error: e.message };
+      }
+
+      // 2. Search contracts for this client
+      try {
+        const { registros, total } = await ixcRequest(int.api_url, token, 'cliente_contrato', 1, 50, {
+          qtype: 'id_cliente',
+          query: clientIxcId,
+          oper: '=',
+        });
+        results.contracts = {
+          total,
+          records: registros.map((r: any) => ({
+            id: r.id,
+            id_cliente: r.id_cliente,
+            status: r.status,
+            status_internet: r.status_internet,
+          })),
+        };
+      } catch (e: any) {
+        results.contracts = { error: e.message };
+      }
+
+      // 3. Check if the ALL boletos search includes this client (search without filter)
+      try {
+        const { registros } = await ixcRequest(int.api_url, token, 'fn_areceber', 1, 1000);
+        const clientBoletos = registros.filter((r: any) => String(r.id_cliente) === clientIxcId);
+        results.all_boletos_search = {
+          total_fetched_page1: registros.length,
+          found_for_client: clientBoletos.length,
+          client_boletos_sample: clientBoletos.slice(0, 3).map((r: any) => ({
+            id: r.id,
+            id_cliente: r.id_cliente,
+            valor: r.valor,
+            valor_aberto: r.valor_aberto,
+            data_vencimento: r.data_vencimento,
+            status: r.status,
+          })),
+        };
+      } catch (e: any) {
+        results.all_boletos_search = { error: e.message };
+      }
+
+      // 4. Check local DB
+      const { data: localClient } = await supa
+        .from('client_timelines')
+        .select('id, client_id, client_name, is_active, status')
+        .eq('organization_id', org_id)
+        .eq('client_id', clientIxcId)
+        .maybeSingle();
+      results.local_client = localClient;
+
+      if (localClient) {
+        const { data: localBoletos, count } = await supa
+          .from('client_boletos')
+          .select('*', { count: 'exact' })
+          .eq('timeline_id', localClient.id)
+          .limit(5);
+        results.local_boletos = { count, sample: localBoletos };
+      }
+
+      // 5. Check the sync mapping
+      const { data: allTimelines } = await supa
+        .from('client_timelines')
+        .select('id, client_id')
+        .eq('organization_id', org_id)
+        .eq('client_id', clientIxcId);
+      results.timeline_mapping = {
+        timelines_with_this_client_id: allTimelines?.length || 0,
+        timelines: allTimelines,
+      };
+
+      return new Response(JSON.stringify(results, null, 2), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     // Full sync or boleto sync
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
