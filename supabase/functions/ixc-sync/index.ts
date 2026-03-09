@@ -1187,9 +1187,29 @@ Deno.serve(async (req) => {
 
       } catch (e: any) {
         if (e.message === 'CANCELLED') {
+          const cancelTime = new Date().toISOString();
+          const cancelDuration = ((Date.now() - new Date(syncStartedAt).getTime()) / 1000).toFixed(1);
+          console.log(`[CANCEL] Sync ${syncId} cancelled after ${cancelDuration}s`);
+          console.log(`[CANCEL] Partial progress: clients=${orgResult.clients_inserted || 0}+${orgResult.clients_updated || 0}, boletos=${orgResult.boletos_inserted || 0}+${orgResult.boletos_updated || 0}`);
+          
           orgResult.errors.push('Sincronização cancelada pelo usuário');
           if (syncId) {
-            await updateSyncLog(supabase, syncId, { status: 'cancelled', completed_at: new Date().toISOString() });
+            const cancelMetadata: any = {
+              cancelledAt: cancelTime,
+              cancelDurationSeconds: parseFloat(cancelDuration),
+              partialMetrics: allMetrics.map(m => ({
+                mode: m.mode, pagesProcessed: m.pagesProcessed,
+                inserts: m.inserts, updates: m.updates, ignored: m.ignored,
+                fallbacks: m.fallbacks,
+              })),
+            };
+            await updateSyncLog(supabase, syncId, {
+              status: 'cancelled',
+              completed_at: cancelTime,
+              records_created: (orgResult.clients_inserted || 0) + (orgResult.boletos_inserted || 0) + (orgResult.clients_discovered || 0),
+              records_updated: (orgResult.clients_updated || 0) + (orgResult.boletos_updated || 0) + (orgResult.debt_updated || 0),
+              sync_metadata: cancelMetadata,
+            });
           }
           // Do NOT update last_sync_at on cancellation
         } else {
