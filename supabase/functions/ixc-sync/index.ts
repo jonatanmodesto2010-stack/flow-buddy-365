@@ -888,14 +888,37 @@ Deno.serve(async (req) => {
             }
           }
 
+          let totalInserted = 0;
+          let totalFailed = 0;
           if (boletosToInsert.length > 0) {
             for (let i = 0; i < boletosToInsert.length; i += 200) {
               if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
               const chunk = boletosToInsert.slice(i, i + 200);
+              const chunkIndex = Math.floor(i / 200);
               const { error } = await supabase.from('client_boletos').insert(chunk);
-              if (error) orgResult.errors.push(`Boleto insert error: ${error.message}`);
+              if (error) {
+                console.error(`[sync_boletos] Chunk ${chunkIndex} failed (${chunk.length} records): ${error.message}`);
+                // Fallback: insert individually
+                let chunkSaved = 0;
+                let chunkFailed = 0;
+                for (const boleto of chunk) {
+                  const { error: singleError } = await supabase.from('client_boletos').insert([boleto]);
+                  if (singleError) {
+                    chunkFailed++;
+                    console.error(`[sync_boletos] Individual insert failed - ixc_id: ${boleto.ixc_boleto_id}, client_timeline: ${boleto.timeline_id}, due: ${boleto.due_date}, value: ${boleto.boleto_value}, error: ${singleError.message}`);
+                  } else {
+                    chunkSaved++;
+                  }
+                }
+                console.log(`[sync_boletos] Chunk ${chunkIndex} fallback: ${chunkSaved} saved, ${chunkFailed} failed`);
+                totalInserted += chunkSaved;
+                totalFailed += chunkFailed;
+              } else {
+                totalInserted += chunk.length;
+              }
             }
           }
+          console.log(`[sync_boletos] Insert summary: ${totalInserted} saved, ${totalFailed} failed out of ${boletosToInsert.length} total`);
 
           if (boletosToUpdate.length > 0) {
             for (let i = 0; i < boletosToUpdate.length; i += 500) {
