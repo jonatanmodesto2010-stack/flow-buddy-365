@@ -169,16 +169,57 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+
+      console.log(`[TEST] Testing connection to: ${api_url}`);
+      console.log(`[TEST] Token provided: ${api_token ? 'Yes' : 'No'} (length: ${api_token?.length || 0})`);
+
       const token = encodeIxcToken(api_token);
-      const { total } = await ixcRequest(api_url, token, 'cliente', 1, 1);
-      const { total: activeTotal } = await ixcRequest(api_url, token, 'cliente', 1, 1, {
-        qtype: 'ativo',
-        query: 'S',
-        oper: '=',
-      });
-      return new Response(JSON.stringify({ success: true, total_clients: total, active_clients: activeTotal }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      console.log(`[TEST] Encoded token length: ${token.length}`);
+
+      try {
+        // Test with multiple endpoints to verify authentication
+        console.log(`[TEST] Testing 'cliente' endpoint...`);
+        const { total } = await ixcRequest(api_url, token, 'cliente', 1, 1);
+        console.log(`[TEST] Success! Found ${total} total clients`);
+
+        console.log(`[TEST] Testing 'cliente' with filter...`);
+        const { total: activeTotal } = await ixcRequest(api_url, token, 'cliente', 1, 1, {
+          qtype: 'ativo',
+          query: 'S',
+          oper: '=',
+        });
+        console.log(`[TEST] Success! Found ${activeTotal} active clients`);
+
+        return new Response(JSON.stringify({ 
+          success: true, 
+          total_clients: total, 
+          active_clients: activeTotal,
+          message: 'Conexão testada com sucesso' 
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+
+      } catch (error: any) {
+        console.error(`[TEST] Connection test failed:`, error.message);
+        
+        // Additional debug for common issues
+        if (error.message.includes('401')) {
+          return new Response(JSON.stringify({ 
+            error: 'Erro de autenticação: Verifique se o token está correto e ativo',
+            details: 'Token pode estar expirado ou formato incorreto',
+            debug_info: {
+              url: api_url,
+              token_length: api_token?.length,
+              error: error.message
+            }
+          }), {
+            status: 401, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
+        throw error;
+      }
     }
 
     // Diagnostic action
