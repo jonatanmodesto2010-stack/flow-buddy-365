@@ -60,7 +60,11 @@ async function ixcRequest(apiUrl: string, encodedToken: string, endpoint: string
 
 async function checkCancelled(supabase: any, syncId: string): Promise<boolean> {
   const { data } = await supabase.from('integration_sync_log').select('status').eq('id', syncId).single();
-  return data?.status === 'cancelled';
+  if (data?.status === 'cancelled') {
+    console.log(`[CANCEL] Cancellation detected for sync ${syncId}`);
+    return true;
+  }
+  return false;
 }
 
 async function updateSyncLog(supabase: any, syncId: string, updates: Record<string, any>) {
