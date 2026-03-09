@@ -356,6 +356,9 @@ const Clients = () => {
               <div className="animate-fade-in">
                 <div className="flex items-center gap-4 mb-6">
                   <h2 className="text-2xl font-bold text-foreground">Clientes</h2>
+                  <span className="text-sm text-muted-foreground">
+                    {totalCount > 0 ? `${startIndex + 1} - ${endIndex} / ${totalCount}` : '0 clientes'}
+                  </span>
                   {filiais.length > 0 &&
                 <Select value={filialFilter} onValueChange={setFilialFilter}>
                       <SelectTrigger className="w-[220px] h-9">
@@ -399,10 +402,7 @@ const Clients = () => {
                     <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Última página">
                       <ChevronsRight size={16} />
                     </button>
-                    <span className="text-sm text-muted-foreground ml-2">
-                      {totalCount > 0 ? `${startIndex + 1} - ${endIndex} / ${totalCount}` : '0 clientes'}
-                    </span>
-                  </div>
+                   </div>
 
                   <div className="flex items-center gap-3">
                     <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
