@@ -15,6 +15,29 @@ function encodeIxcToken(rawToken: string): string {
   return btoa(`${rawToken}:`);
 }
 
+// Try different authentication formats
+function getAlternativeTokenFormats(rawToken: string): string[] {
+  const formats = [];
+  
+  // Format 1: token: (current)
+  formats.push(btoa(`${rawToken}:`));
+  
+  // Format 2: token (without colon)
+  formats.push(btoa(rawToken));
+  
+  // Format 3: Raw token (not base64 encoded)
+  formats.push(rawToken);
+  
+  // Format 4: Common username:password format if token looks like it might be a password
+  if (rawToken.length === 64) {
+    formats.push(btoa(`admin:${rawToken}`));
+    formats.push(btoa(`root:${rawToken}`));
+    formats.push(btoa(`user:${rawToken}`));
+  }
+  
+  return formats;
+}
+
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 async function ixcRequest(apiUrl: string, encodedToken: string, endpoint: string, page = 1, perPage = 1000, extraBody: Record<string, any> = {}) {
