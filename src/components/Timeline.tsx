@@ -180,11 +180,30 @@ export const Timeline = ({
     // Sync alert to IXC if description exists
     if (updatedEvent.description && updatedEvent.description.trim() && timeline.clientInfo.clientId && timeline.organization_id) {
       try {
+        // Buscar created_at real do evento recém-salvo no banco
+        const lineObj = lines.find(l => l.id === editingLineId);
+        const savedEvents = lineObj?.events || [];
+        const savedEvent = savedEvents.find(e => e.description === updatedEvent.description);
+        let eventCreatedAt = savedEvent?.created_at;
+
+        if (!eventCreatedAt) {
+          // Buscar do banco se não disponível localmente
+          const { data: dbEvents } = await supabase
+            .from('timeline_events')
+            .select('created_at, description')
+            .eq('line_id', editingLineId)
+            .eq('description', updatedEvent.description)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          eventCreatedAt = dbEvents?.[0]?.created_at || undefined;
+        }
+
         const { data: ixcResult, error: ixcError } = await supabase.functions.invoke('ixc-update-alert', {
           body: {
             organization_id: timeline.organization_id,
             ixc_client_id: timeline.clientInfo.clientId,
             alert_text: updatedEvent.description,
+            event_created_at: eventCreatedAt,
           },
         });
 
