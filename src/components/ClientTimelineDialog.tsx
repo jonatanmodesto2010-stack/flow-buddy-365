@@ -131,6 +131,7 @@ export const ClientTimelineDialog = ({
               status: e.status as 'created' | 'resolved' | 'no_response',
               time: e.event_time || undefined,
               created_at: e.created_at,
+              ixc_alert_line: e.ixc_alert_line || undefined,
             })),
           };
         })
