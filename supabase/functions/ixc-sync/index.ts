@@ -854,7 +854,7 @@ Deno.serve(async (req) => {
           console.log(`[sync_boletos] Loaded ${existingBoletos.size} existing boletos from DB`);
 
           const boletosToInsert: any[] = [];
-          const boletosToUpdate: { id: string; status: string; boleto_value: number; due_date: string }[] = [];
+          const boletosToUpdate: { id: string; status: string; boleto_value: number; due_date: string; boleto_value_open: number }[] = [];
 
           for (const boleto of boletos) {
             const clientId = String(boleto.id_cliente);
