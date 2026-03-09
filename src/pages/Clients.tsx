@@ -4,7 +4,7 @@ import { Plus, History, TrendingUp, ChevronLeft, ChevronRight, ChevronsLeft, Che
 import { AppLayout } from '@/components/AppLayout';
 import { ClientDashboardModal } from '@/components/ClientDashboardModal';
 import { ClientSearchFilters } from '@/components/ClientSearchFilters';
-import { CalendarWidget } from '@/components/CalendarWidget';
+import { CalendarView } from '@/components/CalendarView';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
