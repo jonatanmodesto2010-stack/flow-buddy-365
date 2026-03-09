@@ -27,6 +27,17 @@ const iconOptions = [
   { value: '👨‍🔧', label: '👨‍🔧 Técnico' },
 ];
 
+const defaultMessages = [
+  { value: 'Pagamento efetuado', label: 'Pagamento efetuado' },
+  { value: 'Boleto enviado', label: 'Boleto enviado' },
+  { value: 'Cliente não atendeu', label: 'Cliente não atendeu' },
+  { value: 'Aguardando retorno', label: 'Aguardando retorno' },
+  { value: 'Acordo realizado', label: 'Acordo realizado' },
+  { value: 'Contato realizado', label: 'Contato realizado' },
+  { value: 'Ligação agendada', label: 'Ligação agendada' },
+  { value: 'Sem resposta', label: 'Sem resposta' },
+];
+
 interface Event {
   id: string;
   icon: string;
@@ -73,6 +84,10 @@ export const EventModal = ({ event, onSave, onDelete, onCancel, position = 'left
 
   const handleSave = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!formData.time) {
+      alert('Por favor, selecione uma plataforma (OPA ou PL)');
+      return;
+    }
     onSave({ ...formData, isNew: false });
   };
 
@@ -98,16 +113,16 @@ export const EventModal = ({ event, onSave, onDelete, onCancel, position = 'left
   };
 
   const modalVariants = {
-    hidden: { 
-      opacity: 0, 
+    hidden: {
+      opacity: 0,
       x: position === 'left' ? -120 : 0,
-      y: position === 'left' ? 0 : -50, 
-      scale: position === 'left' ? 1 : 0.9 
+      y: position === 'left' ? 0 : -50,
+      scale: position === 'left' ? 1 : 0.9
     },
-    visible: { 
-      opacity: 1, 
+    visible: {
+      opacity: 1,
       x: 0,
-      y: 0, 
+      y: 0,
       scale: 1
     },
   };
@@ -119,7 +134,7 @@ export const EventModal = ({ event, onSave, onDelete, onCancel, position = 'left
       animate="visible"
       exit="hidden"
       className={
-        position === 'left' 
+        position === 'left'
           ? 'fixed left-12 top-1/2 -translate-y-1/2 z-50'
           : 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4'
       }
@@ -138,12 +153,12 @@ export const EventModal = ({ event, onSave, onDelete, onCancel, position = 'left
         }}
         onClick={(e) => e.stopPropagation()}
         className={`bg-card rounded-2xl shadow-2xl ${
-          position === 'left' 
-            ? 'w-[420px] border-2 border-border'
+          position === 'left'
+            ? 'w-[420px] max-h-[90vh] flex flex-col border-2 border-border'
             : 'w-full max-w-2xl border border-border'
         }`}
       >
-        <div className="flex items-center justify-between p-6 border-b border-border">
+        <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-xl font-semibold">
             {event.isNew ? 'Novo Evento' : 'Editar Evento'}
           </h2>
@@ -155,108 +170,130 @@ export const EventModal = ({ event, onSave, onDelete, onCancel, position = 'left
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6">
-        <div className="flex flex-col gap-4">
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-2 block">Ícone</label>
-            <Select value={formData.icon} onValueChange={(value) => setFormData({ ...formData, icon: value })}>
-              <SelectTrigger className="w-full bg-background">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {iconOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-2 block">Data</label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal bg-background",
-                    !selectedDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {selectedDate ? format(selectedDate, "dd/MM", { locale: ptBR }) : formData.date || "Selecione a data"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={handleDateSelect}
-                  locale={ptBR}
-                  initialFocus
-                  className="pointer-events-auto"
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-          
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-2 block">Hora</label>
-            <input
-              type="time"
-              value={formData.time || ''}
-              onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-              className="w-full p-3 bg-background rounded-md border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-2 block">
-              Descrição
-              <span className="float-right text-xs">
-                {formData.description.length}/150
-              </span>
-            </label>
-            <textarea 
-              value={formData.description} 
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
-              maxLength={150}
-              className="w-full p-3 bg-background rounded-md border border-border h-20 resize-none text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Descreva o evento..."
-              autoFocus={event.isNew}
-            />
-          </div>
-
-          {/* Log de criação */}
-          {!event.isNew && event.created_at && (
-            <div className="text-xs text-muted-foreground border-t pt-3 mt-2">
-              <span className="font-semibold">Criado em:</span>{' '}
-              {format(new Date(event.created_at), "dd/MM/yyyy 'às' HH:mm")}
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Ícone</label>
+              <Select value={formData.icon} onValueChange={(value) => setFormData({ ...formData, icon: value })}>
+                <SelectTrigger className="w-full bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="z-[60]">
+                  {iconOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
 
-          <div className="flex gap-2 mt-2">
-            <button 
-              onClick={handleCancel} 
-              className="flex-1 py-2 text-sm font-semibold bg-muted text-muted-foreground rounded-lg transition-colors hover:bg-secondary"
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Data</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal bg-background",
+                      !selectedDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {selectedDate ? format(selectedDate, "dd/MM", { locale: ptBR }) : formData.date || "Selecione a data"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 z-[60]" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={handleDateSelect}
+                    locale={ptBR}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Plataforma</label>
+              <Select value={formData.time || ''} onValueChange={(value) => setFormData({ ...formData, time: value })}>
+                <SelectTrigger className="w-full bg-background">
+                  <SelectValue placeholder="Selecione a plataforma" />
+                </SelectTrigger>
+                <SelectContent className="z-[60]">
+                  <SelectItem value="OPA">OPA</SelectItem>
+                  <SelectItem value="PL">PL</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Mensagens Padrões</label>
+              <Select
+                value=""
+                onValueChange={(value) => setFormData({ ...formData, description: value })}
+              >
+                <SelectTrigger className="w-full bg-background">
+                  <SelectValue placeholder="Selecione uma mensagem padrão" />
+                </SelectTrigger>
+                <SelectContent className="z-[60]">
+                  {defaultMessages.map((msg) => (
+                    <SelectItem key={msg.value} value={msg.value}>
+                      {msg.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">
+                Descrição
+                <span className="float-right text-xs">
+                  {formData.description.length}/150
+                </span>
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                maxLength={150}
+                className="w-full p-3 bg-background rounded-md border border-border h-16 resize-none text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="Descreva o evento..."
+                autoFocus={event.isNew}
+              />
+            </div>
+
+            {/* Log de criação */}
+            {!event.isNew && event.created_at && (
+              <div className="text-xs text-muted-foreground border-t pt-3 mt-2">
+                <span className="font-semibold">Criado em:</span>{' '}
+                {format(new Date(event.created_at), "dd/MM/yyyy 'às' HH:mm")}
+              </div>
+            )}
+
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={handleCancel}
+                className="flex-1 py-2 text-sm font-semibold bg-muted text-muted-foreground rounded-lg transition-colors hover:bg-secondary"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSave}
+                className="flex-1 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-pink-500 rounded-lg transition-transform hover:scale-105"
+              >
+                Salvar
+              </button>
+            </div>
+            <button
+              onClick={handleDelete}
+              className="w-full py-2 text-sm font-semibold text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg transition-colors hover:bg-red-500/20 mt-1"
             >
-              Cancelar
-            </button>
-            <button 
-              onClick={handleSave} 
-              className="flex-1 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-pink-500 rounded-lg transition-transform hover:scale-105"
-            >
-              Salvar
+              Excluir
             </button>
           </div>
-          <button 
-            onClick={handleDelete} 
-            className="w-full py-2 text-sm font-semibold text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg transition-colors hover:bg-red-500/20 mt-1"
-          >
-            Excluir
-          </button>
-        </div>
         </div>
       </motion.div>
     </motion.div>
