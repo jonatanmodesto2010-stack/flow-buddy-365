@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
-    // Test connection
+    // Test connection with multiple authentication formats
     if (action === 'test') {
       const { api_url, api_token } = body;
       if (!api_url || !api_token) {
@@ -196,53 +196,65 @@ Deno.serve(async (req) => {
       console.log(`[TEST] Testing connection to: ${api_url}`);
       console.log(`[TEST] Token provided: ${api_token ? 'Yes' : 'No'} (length: ${api_token?.length || 0})`);
 
-      const token = encodeIxcToken(api_token);
-      console.log(`[TEST] Encoded token length: ${token.length}`);
+      // Try different authentication formats
+      const tokenFormats = getAlternativeTokenFormats(api_token);
+      console.log(`[TEST] Will try ${tokenFormats.length} different auth formats`);
 
-      try {
-        // Test with multiple endpoints to verify authentication
-        console.log(`[TEST] Testing 'cliente' endpoint...`);
-        const { total } = await ixcRequest(api_url, token, 'cliente', 1, 1);
-        console.log(`[TEST] Success! Found ${total} total clients`);
+      let lastError = null;
 
-        console.log(`[TEST] Testing 'cliente' with filter...`);
-        const { total: activeTotal } = await ixcRequest(api_url, token, 'cliente', 1, 1, {
-          qtype: 'ativo',
-          query: 'S',
-          oper: '=',
-        });
-        console.log(`[TEST] Success! Found ${activeTotal} active clients`);
+      for (let i = 0; i < tokenFormats.length; i++) {
+        const format = tokenFormats[i];
+        console.log(`[TEST] Trying format ${i + 1}/${tokenFormats.length}...`);
 
-        return new Response(JSON.stringify({ 
-          success: true, 
-          total_clients: total, 
-          active_clients: activeTotal,
-          message: 'Conexão testada com sucesso' 
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        try {
+          const { total } = await ixcRequest(api_url, format, 'cliente', 1, 1);
+          console.log(`[TEST] SUCCESS with format ${i + 1}! Found ${total} total clients`);
 
-      } catch (error: any) {
-        console.error(`[TEST] Connection test failed:`, error.message);
-        
-        // Additional debug for common issues
-        if (error.message.includes('401')) {
+          const { total: activeTotal } = await ixcRequest(api_url, format, 'cliente', 1, 1, {
+            qtype: 'ativo',
+            query: 'S',
+            oper: '=',
+          });
+
           return new Response(JSON.stringify({ 
-            error: 'Erro de autenticação: Verifique se o token está correto e ativo',
-            details: 'Token pode estar expirado ou formato incorreto',
-            debug_info: {
-              url: api_url,
-              token_length: api_token?.length,
-              error: error.message
-            }
+            success: true, 
+            total_clients: total, 
+            active_clients: activeTotal,
+            auth_format_used: i + 1,
+            message: `Conexão testada com sucesso (formato de autenticação ${i + 1})` 
           }), {
-            status: 401, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
+
+        } catch (error: any) {
+          console.log(`[TEST] Format ${i + 1} failed: ${error.message.substring(0, 100)}`);
+          lastError = error;
+          
+          // If not a 401 error, break (it's probably a different issue)
+          if (!error.message.includes('401')) {
+            break;
+          }
         }
-        
-        throw error;
       }
+
+      // All formats failed
+      console.error(`[TEST] All authentication formats failed. Last error:`, lastError?.message);
+      
+      return new Response(JSON.stringify({ 
+        error: 'Falha na autenticação com todos os formatos testados',
+        details: 'Token pode estar incorreto, expirado ou servidor pode ter restrições de IP',
+        formats_tested: tokenFormats.length,
+        last_error: lastError?.message || 'Erro desconhecido',
+        suggestions: [
+          'Verifique se o token está correto e ativo no painel do IXC',
+          'Confirme se a URL da API está correta',
+          'Verifique se há restrições de IP no servidor IXC',
+          'Contate o suporte do IXC para verificar o formato correto da API'
+        ]
+      }), {
+        status: 401, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // Diagnostic action
