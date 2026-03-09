@@ -6,6 +6,9 @@ const corsHeaders = {
 };
 
 function encodeIxcToken(rawToken: string): string {
+  // Debug: log the token format (without exposing the actual token)
+  console.log(`[DEBUG] Token format - length: ${rawToken.length}, has colon: ${rawToken.includes(':')}`);
+  
   if (rawToken.includes(':')) {
     return btoa(rawToken);
   }
@@ -27,18 +30,27 @@ async function ixcRequest(apiUrl: string, encodedToken: string, endpoint: string
     ...extraBody,
   };
 
+  console.log(`[DEBUG] Making request to: ${url}`);
+  console.log(`[DEBUG] Request body:`, JSON.stringify(body, null, 2));
+  console.log(`[DEBUG] Auth header present: ${!!encodedToken}`);
+
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Basic ${encodedToken}`,
       'ixcsoft': 'listar',
+      'User-Agent': 'Lovable-IXC-Sync/1.0',
     },
     body: JSON.stringify(body),
   });
 
+  console.log(`[DEBUG] Response status: ${res.status}`);
+  console.log(`[DEBUG] Response headers:`, Object.fromEntries(res.headers.entries()));
+
   if (!res.ok) {
     const text = await res.text();
+    console.error(`[ERROR] IXC API failed - Status: ${res.status}, Response: ${text.substring(0, 500)}`);
     throw new Error(`IXC API error ${res.status}: ${text}`);
   }
 
