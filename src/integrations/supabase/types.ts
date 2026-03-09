@@ -1100,6 +1100,7 @@ export type Database = {
           icon: string
           icon_size: string
           id: string
+          ixc_alert_line: string | null
           line_id: string
           position: string
           status: string
@@ -1114,6 +1115,7 @@ export type Database = {
           icon?: string
           icon_size?: string
           id?: string
+          ixc_alert_line?: string | null
           line_id: string
           position: string
           status?: string
@@ -1128,6 +1130,7 @@ export type Database = {
           icon?: string
           icon_size?: string
           id?: string
+          ixc_alert_line?: string | null
           line_id?: string
           position?: string
           status?: string
