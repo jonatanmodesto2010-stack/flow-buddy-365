@@ -306,8 +306,8 @@ export const ClientTimeline = ({ clientId, clientName, onClose }: ClientTimeline
     setEditingEvent(null);
     setEditingLineId(null);
 
-    // Sync IXC remove - non-blocking
-    if (deletedEvent?.description?.trim() && deletedEvent?.created_at) {
+    // Sync IXC remove - non-blocking, using ixc_alert_line
+    if (deletedEvent?.ixc_alert_line) {
       try {
         const { data: timelineData } = await supabase
           .from('client_timelines')
@@ -320,20 +320,19 @@ export const ClientTimeline = ({ clientId, clientName, onClose }: ClientTimeline
             body: {
               organization_id: timelineData.organization_id,
               ixc_client_id: timelineData.client_id,
-              alert_text: deletedEvent.description,
-              event_created_at: deletedEvent.created_at,
-              action: 'remove',
+              alert_line: deletedEvent.ixc_alert_line,
+              action: 'remove_line',
             },
           });
 
           if (ixcError || ixcResult?.error) {
-            console.warn('IXC alert remove sync failed:', ixcError || ixcResult?.error);
+            console.warn('IXC alert remove_line sync failed:', ixcError || ixcResult?.error);
           } else {
-            console.log('IXC alert remove synced:', ixcResult);
+            console.log('IXC alert remove_line synced:', ixcResult);
           }
         }
       } catch (err) {
-        console.warn('IXC alert remove sync error:', err);
+        console.warn('IXC alert remove_line sync error:', err);
       }
     }
   };
