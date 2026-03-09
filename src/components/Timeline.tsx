@@ -657,8 +657,19 @@ export const Timeline = ({
                           >
                             {event.position === 'bottom' ? (
                               <>
-                                <div className="text-xs font-semibold text-foreground mb-2 whitespace-nowrap">
-                                  {event.date}
+                                <div className="flex items-center gap-1.5 mb-2">
+                                  <span className="text-xs font-semibold text-foreground whitespace-nowrap">
+                                    {event.date}
+                                  </span>
+                                  {event.time && (
+                                    <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${
+                                      event.time === 'OPA' 
+                                        ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400' 
+                                        : 'bg-purple-500/20 text-purple-600 dark:text-purple-400'
+                                    }`}>
+                                      {event.time}
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="leading-none flex items-center justify-center">
                                   <span className="text-2xl">{event.icon}</span>
@@ -669,8 +680,19 @@ export const Timeline = ({
                                 <div className="mb-2 leading-none flex items-center justify-center">
                                   <span className="text-2xl">{event.icon}</span>
                                 </div>
-                                <div className="text-xs font-semibold text-foreground whitespace-nowrap">
-                                  {event.date}
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-semibold text-foreground whitespace-nowrap">
+                                    {event.date}
+                                  </span>
+                                  {event.time && (
+                                    <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${
+                                      event.time === 'OPA' 
+                                        ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400' 
+                                        : 'bg-purple-500/20 text-purple-600 dark:text-purple-400'
+                                    }`}>
+                                      {event.time}
+                                    </span>
+                                  )}
                                 </div>
                               </>
                             )}
