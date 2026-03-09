@@ -55,7 +55,7 @@ const Dashboard = () => {
 
       const timelineIds = (data || []).map((t: any) => t.id);
       if (timelineIds.length > 0) {
-        const boletosData = await fetchInChunks('client_boletos', 'timeline_id', timelineIds, 'timeline_id, due_date, status, boleto_value');
+        const boletosData = await fetchInChunks('client_boletos', 'timeline_id', timelineIds, 'timeline_id, due_date, status, boleto_value, boleto_value_open');
         setBoletos(boletosData || []);
       }
     } catch (err) {
