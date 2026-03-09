@@ -261,6 +261,18 @@ export const ClientTimeline = ({ clientId, clientName, onClose }: ClientTimeline
             });
           } else {
             console.log('IXC alert synced:', ixcResult);
+            // Salvar ixc_alert_line no banco para referência futura
+            if (ixcResult?.alert_line) {
+              try {
+                await supabase
+                  .from('timeline_events')
+                  .update({ ixc_alert_line: ixcResult.alert_line } as any)
+                  .eq('line_id', editingLineId)
+                  .eq('description', event.description);
+              } catch (saveErr) {
+                console.warn('Failed to save ixc_alert_line:', saveErr);
+              }
+            }
           }
         }
       } catch (ixcErr) {
