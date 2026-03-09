@@ -210,6 +210,17 @@ export const Timeline = ({
 
         if (ixcError || ixcResult?.error) {
           console.warn('IXC alert sync failed:', ixcError || ixcResult?.error);
+        } else if (ixcResult?.alert_line) {
+          // Salvar ixc_alert_line no banco para referência futura na exclusão
+          try {
+            await supabase
+              .from('timeline_events')
+              .update({ ixc_alert_line: ixcResult.alert_line } as any)
+              .eq('line_id', editingLineId)
+              .eq('description', updatedEvent.description);
+          } catch (saveErr) {
+            console.warn('Failed to save ixc_alert_line:', saveErr);
+          }
         }
       } catch (ixcErr) {
         console.warn('IXC alert sync error:', ixcErr);
