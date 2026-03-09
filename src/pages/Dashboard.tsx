@@ -142,7 +142,7 @@ const Dashboard = () => {
     for (const b of overdueBoletos) {
       const d = new Date(b.due_date); d.setHours(0, 0, 0, 0);
       const days = Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-      const val = Number(b.boleto_value) || 0;
+      const val = getOpenValue(b);
       if (days <= 30) { aging['1-30'] += val; agingCount['1-30']++; }
       else if (days <= 60) { aging['31-60'] += val; agingCount['31-60']++; }
       else if (days <= 90) { aging['61-90'] += val; agingCount['61-90']++; }
