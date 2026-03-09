@@ -4,7 +4,7 @@ import { Plus, History, TrendingUp, ChevronLeft, ChevronRight, ChevronsLeft, Che
 import { AppLayout } from '@/components/AppLayout';
 import { ClientDashboardModal } from '@/components/ClientDashboardModal';
 import { ClientSearchFilters } from '@/components/ClientSearchFilters';
-import { CalendarWidget } from '@/components/CalendarWidget';
+import { CalendarView } from '@/components/CalendarView';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -350,9 +350,9 @@ const Clients = () => {
   return (
     <AppLayout>
       <div className="p-6">
-          <div className="max-w-7xl mx-auto flex gap-6">
-            {/* Left Column - Client List */}
-            <div className="flex-1 min-w-0">
+          <div className="max-w-[1600px] mx-auto flex gap-6">
+            {/* Left Column - Client List (35%) */}
+            <div className="w-[35%] min-w-0 flex-shrink-0">
               <div className="animate-fade-in">
                 <div className="flex items-center gap-4 mb-6">
                   <h2 className="text-2xl font-bold text-foreground">Clientes</h2>
@@ -517,12 +517,13 @@ const Clients = () => {
               </div>
             </div>
 
-            {/* Right Column - Widgets */}
-            <div className="hidden lg:block w-[380px] flex-shrink-0 space-y-4">
-              <CalendarWidget
-              organizationId={organizationId}
-              onClientClick={(name) => setSearchTerm(name)} />
-            
+            {/* Right Column - Calendar (65%) */}
+            <div className="hidden lg:block flex-1 min-w-0">
+              <CalendarView
+                onClientClick={(name) => setSearchTerm(name)}
+                hideTitle
+                hideStats
+              />
             </div>
           </div>
         </div>
