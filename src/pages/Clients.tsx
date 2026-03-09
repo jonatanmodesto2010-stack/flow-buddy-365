@@ -31,7 +31,7 @@ const Clients = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [overdueDaysLoading, setOverdueDaysLoading] = useState(false);
-  const { organizationId } = useUserRole();
+  const { organizationId, isLoading: roleLoading } = useUserRole();
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [newClientModalOpen, setNewClientModalOpen] = useState(false);
@@ -330,6 +330,39 @@ const Clients = () => {
     return 'bg-card border border-border';
   };
 
+  if (roleLoading) {
+    return (
+      <AppLayout>
+        <div className="p-6">
+          <div className="max-w-7xl mx-auto">
+            <div className="h-9 w-48 bg-muted animate-pulse rounded mb-6" />
+            <div className="flex flex-col gap-3">
+              {[1, 2, 3, 4].map((i) =>
+                <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
+              )}
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!organizationId) {
+    return (
+      <AppLayout>
+        <div className="p-6">
+          <div className="max-w-7xl mx-auto flex flex-col items-center justify-center py-20 text-center">
+            <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Nenhuma organização encontrada</h2>
+            <p className="text-muted-foreground">
+              Você precisa estar vinculado a uma organização para acessar os clientes.
+            </p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   if (loading && clients.length === 0) {
     return (
       <AppLayout>
@@ -338,13 +371,13 @@ const Clients = () => {
             <div className="h-9 w-48 bg-muted animate-pulse rounded mb-6" />
             <div className="flex flex-col gap-3">
               {[1, 2, 3, 4].map((i) =>
-              <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
+                <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
               )}
             </div>
           </div>
         </div>
-      </AppLayout>);
-
+      </AppLayout>
+    );
   }
 
   return (
