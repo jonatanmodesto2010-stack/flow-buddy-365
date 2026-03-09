@@ -15,6 +15,7 @@ interface Integration {
   api_url: string | null;
   api_token: string | null;
   api_url_contracts: string | null;
+  ixc_os_retirada_assunto_id: string | null;
   is_active: boolean;
 }
 
@@ -32,6 +33,7 @@ export const IntegrationsSettings = () => {
   const [apiUrl, setApiUrl] = useState('');
   const [apiToken, setApiToken] = useState('');
   const [apiUrlContracts, setApiUrlContracts] = useState('');
+  const [osRetiradaAssuntoId, setOsRetiradaAssuntoId] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -70,6 +72,7 @@ export const IntegrationsSettings = () => {
         setApiUrl(data.api_url || '');
         setApiToken(data.api_token || '');
         setApiUrlContracts(data.api_url_contracts || '');
+        setOsRetiradaAssuntoId(data.ixc_os_retirada_assunto_id || '');
         setIsActive(data.is_active);
       }
     } catch (err: any) {
@@ -177,6 +180,7 @@ export const IntegrationsSettings = () => {
             api_url: apiUrl || null,
             api_token: apiToken || null,
             api_url_contracts: apiUrlContracts || null,
+            ixc_os_retirada_assunto_id: osRetiradaAssuntoId || null,
             is_active: isActive,
           })
           .eq('id', integration.id);
@@ -190,6 +194,7 @@ export const IntegrationsSettings = () => {
             api_url: apiUrl || null,
             api_token: apiToken || null,
             api_url_contracts: apiUrlContracts || null,
+            ixc_os_retirada_assunto_id: osRetiradaAssuntoId || null,
             is_active: isActive,
           });
         if (error) throw error;
@@ -293,6 +298,12 @@ export const IntegrationsSettings = () => {
           <div>
             <label className="text-sm font-medium block mb-1">URL da API de Contratos (Opcional)</label>
             <Input value={apiUrlContracts} onChange={(e) => setApiUrlContracts(e.target.value)} placeholder="URL alternativa para consultar contratos" />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium block mb-1">ID do Assunto de Retirada (IXC)</label>
+            <Input value={osRetiradaAssuntoId} onChange={(e) => setOsRetiradaAssuntoId(e.target.value)} placeholder="ID do assunto de retirada de equipamento no IXC" />
+            <p className="text-xs text-muted-foreground mt-1">Utilizado para buscar OS de retirada de equipamento no Dashboard</p>
           </div>
 
           <div className="flex flex-wrap gap-3 pt-2">
