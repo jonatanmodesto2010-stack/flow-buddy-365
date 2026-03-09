@@ -220,6 +220,46 @@ export const ClientTimeline = ({ clientId, clientName, onClose }: ClientTimeline
 
     setLines(updatedLines);
     await saveLineToDatabase(editingLineId, currentLine.events);
+
+    // Sync alert to IXC if description exists
+    if (event.description && event.description.trim()) {
+      try {
+        const { data: timelineData } = await supabase
+          .from('client_timelines')
+          .select('client_id, organization_id')
+          .eq('id', clientId)
+          .single();
+
+        if (timelineData?.client_id && timelineData?.organization_id) {
+          const { data: ixcResult, error: ixcError } = await supabase.functions.invoke('ixc-update-alert', {
+            body: {
+              organization_id: timelineData.organization_id,
+              ixc_client_id: timelineData.client_id,
+              alert_text: event.description,
+            },
+          });
+
+          if (ixcError || ixcResult?.error) {
+            console.warn('IXC alert sync failed:', ixcError || ixcResult?.error);
+            toast({
+              title: 'Evento salvo',
+              description: 'Evento salvo, mas falha ao atualizar alerta no IXC.',
+              variant: 'destructive',
+            });
+          } else {
+            console.log('IXC alert synced:', ixcResult);
+          }
+        }
+      } catch (ixcErr) {
+        console.warn('IXC alert sync error:', ixcErr);
+        toast({
+          title: 'Evento salvo',
+          description: 'Evento salvo, mas falha ao atualizar alerta no IXC.',
+          variant: 'destructive',
+        });
+      }
+    }
+
     setEditingEvent(null);
     setEditingLineId(null);
   };

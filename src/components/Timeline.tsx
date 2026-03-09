@@ -169,13 +169,33 @@ export const Timeline = ({
     setEditingLineId(lineId);
   };
 
-  const handleSaveEvent = (updatedEvent: Event) => {
+  const handleSaveEvent = async (updatedEvent: Event) => {
     if (editingLineId === null) return;
     const line = lines.find(l => l.id === editingLineId);
     if (!line) return;
     
     const lineEvents = line.events || [];
     updateLine(editingLineId, lineEvents.map(e => e.id === updatedEvent.id ? updatedEvent : e));
+
+    // Sync alert to IXC if description exists
+    if (updatedEvent.description && updatedEvent.description.trim() && timeline.clientInfo.clientId && timeline.organization_id) {
+      try {
+        const { data: ixcResult, error: ixcError } = await supabase.functions.invoke('ixc-update-alert', {
+          body: {
+            organization_id: timeline.organization_id,
+            ixc_client_id: timeline.clientInfo.clientId,
+            alert_text: updatedEvent.description,
+          },
+        });
+
+        if (ixcError || ixcResult?.error) {
+          console.warn('IXC alert sync failed:', ixcError || ixcResult?.error);
+        }
+      } catch (ixcErr) {
+        console.warn('IXC alert sync error:', ixcErr);
+      }
+    }
+
     setEditingEvent(null);
     setEditingLineId(null);
   };
