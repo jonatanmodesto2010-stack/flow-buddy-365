@@ -475,7 +475,7 @@ const Clients = () => {
                                       ON
                                     </div> :
                           !onlineLoading ?
-                          <div className="px-2.5 py-1 bg-muted text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border">
+                          <div className="px-2.5 py-1 text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border bg-red-500">
                                       <WifiOff size={11} />
                                       OFF
                                     </div> :
