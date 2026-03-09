@@ -174,66 +174,52 @@ const Calendar = () => {
       
       console.log('🏢 Organization ID:', organizationId);
       
-      const { data: timelines, error: timelinesError } = await supabaseClient
-        .from('client_timelines')
-        .select('id, client_name')
-        .eq('organization_id', organizationId);
+      // Usar JOIN direto via nested select para evitar URLs enormes com .in()
+      const { data: eventsData, error: eventsError } = await supabaseClient
+        .from('timeline_events')
+        .select(`
+          id,
+          event_date,
+          event_time,
+          description,
+          status,
+          icon,
+          timeline_lines!inner (
+            timeline_id,
+            client_timelines!inner (
+              id,
+              client_name,
+              organization_id
+            )
+          )
+        `)
+        .eq('timeline_lines.client_timelines.organization_id', organizationId)
+        .limit(10000);
 
-      if (timelinesError) throw timelinesError;
-      
-      console.log('📋 Timelines encontradas:', timelines?.length || 0);
+      if (eventsError) throw eventsError;
 
-      if (timelines && timelines.length > 0) {
-        const timelineIds = timelines.map(t => t.id);
-        
-        const { data: lines, error: linesError } = await supabaseClient
-          .from('timeline_lines')
-          .select('id, timeline_id')
-          .in('timeline_id', timelineIds);
+      // Mapear eventos com nome do cliente
+      const eventsWithClients = (eventsData || []).map((event: any) => ({
+        id: event.id,
+        client_name: event.timeline_lines?.client_timelines?.client_name || 'Cliente',
+        event_date: event.event_date,
+        event_time: event.event_time,
+        description: event.description,
+        status: event.status,
+        icon: event.icon,
+      }));
 
-        if (linesError) throw linesError;
-        
-        console.log('📊 Lines encontradas:', lines?.length || 0);
+      console.log('📊 Eventos carregados:', {
+        total: eventsWithClients.length,
+        eventos: eventsWithClients.slice(0, 10).map(e => ({
+          client: e.client_name,
+          date: e.event_date,
+          status: e.status
+        }))
+      });
 
-        if (lines && lines.length > 0) {
-          const lineIds = lines.map(l => l.id);
-          
-          const { data: eventsData, error: eventsError } = await supabaseClient
-            .from('timeline_events')
-            .select('id, event_date, event_time, description, status, icon, line_id')
-            .in('line_id', lineIds);
-
-          if (eventsError) throw eventsError;
-
-          // Map events with client names
-          const eventsWithClients = (eventsData || []).map(event => {
-            const line = lines.find(l => l.id === event.line_id);
-            const timeline = timelines.find(t => t.id === line?.timeline_id);
-            
-            return {
-              id: event.id,
-              client_name: timeline?.client_name || 'Cliente',
-              event_date: event.event_date,
-              event_time: event.event_time,
-              description: event.description,
-              status: event.status,
-              icon: event.icon,
-            };
-          });
-
-          console.log('📊 Eventos carregados:', {
-            total: eventsWithClients.length,
-            eventos: eventsWithClients.map(e => ({
-              client: e.client_name,
-              date: e.event_date,
-              status: e.status
-            }))
-          });
-
-          setEvents(eventsWithClients);
-          setRefreshKey(prev => prev + 1);
-        }
-      }
+      setEvents(eventsWithClients);
+      setRefreshKey(prev => prev + 1);
     } catch (error: any) {
       toast({
         title: 'Erro ao carregar eventos',
