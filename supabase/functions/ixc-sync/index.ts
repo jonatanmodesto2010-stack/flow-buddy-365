@@ -935,8 +935,10 @@ Deno.serve(async (req) => {
           }
 
           orgResult.boletos = boletos.length;
-          orgResult.boletos_inserted = boletosToInsert.length;
+          orgResult.boletos_inserted = totalInserted;
+          orgResult.boletos_failed = totalFailed;
           orgResult.boletos_updated = boletosToUpdate.length;
+          orgResult.existing_boletos_detected = existingBoletos.size;
           console.log(`[sync] Boleto sync done in ${((Date.now() - boletoStart) / 1000).toFixed(1)}s`);
         }
 
