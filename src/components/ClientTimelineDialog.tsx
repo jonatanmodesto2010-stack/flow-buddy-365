@@ -26,6 +26,7 @@ interface Event {
   position: 'top' | 'bottom';
   status: 'created' | 'resolved' | 'no_response';
   time?: string;
+  ixc_alert_line?: string;
 }
 
 interface TimelineLine {
