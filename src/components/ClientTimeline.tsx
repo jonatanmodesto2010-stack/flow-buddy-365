@@ -405,6 +405,7 @@ export const ClientTimeline = ({ clientId, clientName, onClose }: ClientTimeline
         icon: e.icon,
         icon_size: e.iconSize,
         event_order: index,
+        ixc_alert_line: e.ixc_alert_line || null,
       }));
 
       if (eventsToInsert.length > 0) {

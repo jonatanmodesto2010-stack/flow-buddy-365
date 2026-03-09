@@ -247,6 +247,7 @@ export const ClientTimelineDialog = ({
               icon: event.icon,
               icon_size: event.iconSize,
               event_order: index,
+              ixc_alert_line: (event as any).ixc_alert_line || null,
             }));
 
             await supabase

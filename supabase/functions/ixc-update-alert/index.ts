@@ -38,6 +38,62 @@ function formatAlertTimestamp(isoDatetime: string): string {
   return `[${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}]`;
 }
 
+async function readIxcClient(clientUrl: string, encodedToken: string, ixcClientId: string) {
+  const readRes = await fetch(clientUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Basic ${encodedToken}`,
+      'ixcsoft': 'listar',
+    },
+    body: JSON.stringify({
+      qtype: 'cliente.id',
+      query: String(ixcClientId),
+      oper: '=',
+      page: '1',
+      rp: '1',
+      sortname: 'cliente.id',
+      sortorder: 'asc',
+    }),
+  });
+
+  const readText = await readRes.text();
+  console.log(`IXC read status: ${readRes.status}, length: ${readText.length}`);
+
+  if (!readRes.ok || readText.startsWith('<')) {
+    throw { status: 502, message: 'Falha ao ler cliente no IXC', details: readText.substring(0, 300) };
+  }
+
+  const readData = JSON.parse(readText);
+  const registros = Array.isArray(readData.registros) ? readData.registros : [];
+
+  if (registros.length === 0) {
+    throw { status: 404, message: 'Cliente não encontrado no IXC', ixc_client_id: ixcClientId };
+  }
+
+  return registros[0];
+}
+
+async function putIxcClient(clientUrl: string, encodedToken: string, payload: any) {
+  const putRes = await fetch(clientUrl, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Basic ${encodedToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const putText = await putRes.text();
+  console.log(`IXC PUT status: ${putRes.status}, response: ${putText.substring(0, 200)}`);
+
+  if (!putRes.ok) {
+    throw { status: 502, message: 'Falha ao atualizar alerta no IXC', details: putText.substring(0, 300) };
+  }
+
+  return putText;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -70,7 +126,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { organization_id, ixc_client_id, alert_text, action, event_created_at } = body;
+    const { organization_id, ixc_client_id, alert_text, action, event_created_at, alert_line } = body;
 
     console.log(`ixc-update-alert: action=${action || 'update'}, org=${organization_id}, ixc_client=${ixc_client_id}`);
 
@@ -104,57 +160,18 @@ Deno.serve(async (req) => {
 
     console.log(`Reading IXC client at: ${clientUrl}`);
 
-    // Step 1: Read current client data
-    const readRes = await fetch(clientUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${encodedToken}`,
-        'ixcsoft': 'listar',
-      },
-      body: JSON.stringify({
-        qtype: 'cliente.id',
-        query: String(ixc_client_id),
-        oper: '=',
-        page: '1',
-        rp: '1',
-        sortname: 'cliente.id',
-        sortorder: 'asc',
-      }),
-    });
-
-    const readText = await readRes.text();
-    console.log(`IXC read status: ${readRes.status}, length: ${readText.length}`);
-
-    if (!readRes.ok || readText.startsWith('<')) {
-      console.error(`IXC read error: ${readText.substring(0, 300)}`);
-      return new Response(JSON.stringify({
-        error: 'Falha ao ler cliente no IXC',
-        details: readText.substring(0, 300),
-      }), {
-        status: 502,
+    let clientData: any;
+    try {
+      clientData = await readIxcClient(clientUrl, encodedToken, ixc_client_id);
+    } catch (err: any) {
+      return new Response(JSON.stringify({ error: err.message, details: err.details, ixc_client_id: err.ixc_client_id }), {
+        status: err.status || 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    const readData = JSON.parse(readText);
-    const registros = Array.isArray(readData.registros) ? readData.registros : [];
-
-    if (registros.length === 0) {
-      return new Response(JSON.stringify({
-        error: 'Cliente não encontrado no IXC',
-        ixc_client_id,
-      }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const clientData = registros[0];
 
     // If action is test_read, return raw client data
     if (action === 'test_read') {
-      console.log(`test_read: returning raw data for client ${ixc_client_id}`);
       return new Response(JSON.stringify({
         success: true,
         action: 'test_read',
@@ -166,7 +183,58 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Action: remove - remove exact line from alert
+    // Action: remove_line - remove exact line from alert (new robust method)
+    if (action === 'remove_line') {
+      if (!alert_line) {
+        return new Response(JSON.stringify({ error: 'alert_line é obrigatório para remove_line' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const currentAlert = clientData.alerta || '';
+      console.log(`ixc-update-alert remove_line: ixc_client=${ixc_client_id}, alert_line="${alert_line}"`);
+
+      const lines = currentAlert.split('\n');
+      const filtered = lines.filter((line: string) => line !== alert_line);
+
+      if (filtered.length === lines.length) {
+        console.log(`ixc-update-alert remove_line: no match found, skipping PUT`);
+        return new Response(JSON.stringify({
+          success: true,
+          no_match: true,
+          ixc_client_id,
+          alert_line,
+          message: 'Linha não encontrada no alerta, nenhuma atualização realizada',
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const newAlert = filtered.join('\n');
+      console.log(`ixc-update-alert remove_line: removing line, new alert length=${newAlert.length}`);
+
+      try {
+        await putIxcClient(clientUrl, encodedToken, { ...clientData, alerta: newAlert });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message, details: err.details, ixc_client_id }), {
+          status: err.status || 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        action: 'remove_line',
+        ixc_client_id,
+        removed_line: alert_line,
+        message: 'Linha removida do alerta com sucesso',
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Action: remove (legacy) - remove exact line from alert by timestamp reconstruction
     if (action === 'remove') {
       if (!alert_text || !event_created_at) {
         return new Response(JSON.stringify({ error: 'alert_text e event_created_at são obrigatórios para remoção' }), {
@@ -197,32 +265,11 @@ Deno.serve(async (req) => {
       }
 
       const newAlert = filtered.join('\n');
-      const removedLine = expectedLine;
-
-      console.log(`ixc-update-alert remove: removing line, new alert length=${newAlert.length}`);
-
-      const updatePayload = { ...clientData, alerta: newAlert };
-
-      const putRes = await fetch(clientUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Basic ${encodedToken}`,
-        },
-        body: JSON.stringify(updatePayload),
-      });
-
-      const putText = await putRes.text();
-      console.log(`IXC PUT (remove) status: ${putRes.status}, response: ${putText.substring(0, 200)}`);
-
-      if (!putRes.ok) {
-        console.error(`IXC PUT (remove) error: ${putText.substring(0, 500)}`);
-        return new Response(JSON.stringify({
-          error: 'Falha ao atualizar alerta no IXC',
-          details: putText.substring(0, 300),
-          ixc_client_id,
-        }), {
-          status: 502,
+      try {
+        await putIxcClient(clientUrl, encodedToken, { ...clientData, alerta: newAlert });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message, details: err.details, ixc_client_id }), {
+          status: err.status || 502,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -231,7 +278,7 @@ Deno.serve(async (req) => {
         success: true,
         action: 'remove',
         ixc_client_id,
-        removed_line: removedLine,
+        removed_line: expectedLine,
         message: 'Linha removida do alerta com sucesso',
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -254,29 +301,11 @@ Deno.serve(async (req) => {
 
     console.log(`Alert: current length=${currentAlert.length}, new entry="${newEntry}", trimmed entries`);
 
-    // PUT with full payload, only changing alerta
-    const updatePayload = { ...clientData, alerta: trimmedAlert };
-
-    const putRes = await fetch(clientUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${encodedToken}`,
-      },
-      body: JSON.stringify(updatePayload),
-    });
-
-    const putText = await putRes.text();
-    console.log(`IXC PUT status: ${putRes.status}, response: ${putText.substring(0, 200)}`);
-
-    if (!putRes.ok) {
-      console.error(`IXC PUT error: ${putText.substring(0, 500)}`);
-      return new Response(JSON.stringify({
-        error: 'Falha ao atualizar alerta no IXC',
-        details: putText.substring(0, 300),
-        ixc_client_id,
-      }), {
-        status: 502,
+    try {
+      await putIxcClient(clientUrl, encodedToken, { ...clientData, alerta: trimmedAlert });
+    } catch (err: any) {
+      return new Response(JSON.stringify({ error: err.message, details: err.details, ixc_client_id }), {
+        status: err.status || 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -285,6 +314,7 @@ Deno.serve(async (req) => {
       success: true,
       ixc_client_id,
       alert_text: newEntry,
+      alert_line: newEntry,
       message: 'Alerta atualizado com sucesso no IXC',
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
