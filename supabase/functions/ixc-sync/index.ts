@@ -407,24 +407,43 @@ Deno.serve(async (req) => {
         results.contracts = { error: e.message };
       }
 
-      // 3. Check if the ALL boletos search includes this client (search without filter)
+      // 3. Search for specific boleto IDs in generic search to check id_cliente format
       try {
-        const { registros } = await ixcRequest(int.api_url, token, 'fn_areceber', 1, 1000);
-        const clientBoletos = registros.filter((r: any) => String(r.id_cliente) === clientIxcId);
-        results.all_boletos_search = {
-          total_fetched_page1: registros.length,
-          found_for_client: clientBoletos.length,
-          client_boletos_sample: clientBoletos.slice(0, 3).map((r: any) => ({
-            id: r.id,
-            id_cliente: r.id_cliente,
-            valor: r.valor,
-            valor_aberto: r.valor_aberto,
-            data_vencimento: r.data_vencimento,
-            status: r.status,
-          })),
+        // Fetch the page where boleto 37975 would be (id > 37000)
+        const { registros: targetPage } = await ixcRequest(int.api_url, token, 'fn_areceber', 1, 100, {
+          qtype: 'id',
+          query: '37970',
+          oper: '>',
+        });
+        const boleto37975 = targetPage.find((r: any) => String(r.id) === '37975');
+        
+        // Also search first page for any with this client id
+        const { registros: firstPage } = await ixcRequest(int.api_url, token, 'fn_areceber', 1, 1000);
+        const clientBoletosPage1 = firstPage.filter((r: any) => String(r.id_cliente) === clientIxcId);
+        
+        // Check ALL unique id_cliente formats in first page
+        const idClienteFormats = new Set(firstPage.slice(0, 5).map((r: any) => `type=${typeof r.id_cliente}, value="${r.id_cliente}", len=${String(r.id_cliente).length}`));
+        
+        results.generic_search_analysis = {
+          boleto_37975_found: !!boleto37975,
+          boleto_37975_data: boleto37975 ? {
+            id: boleto37975.id,
+            id_cliente: boleto37975.id_cliente,
+            id_cliente_type: typeof boleto37975.id_cliente,
+            id_cliente_length: String(boleto37975.id_cliente).length,
+            id_cliente_trimmed: String(boleto37975.id_cliente).trim(),
+            id_cliente_matches_2173: String(boleto37975.id_cliente) === '2173',
+            id_cliente_trim_matches_2173: String(boleto37975.id_cliente).trim() === '2173',
+            valor: boleto37975.valor,
+            status: boleto37975.status,
+          } : null,
+          first_page_client_matches: clientBoletosPage1.length,
+          target_page_records: targetPage.length,
+          target_page_client_ids: targetPage.filter((r: any) => String(r.id_cliente) === clientIxcId).length,
+          id_cliente_format_samples: [...idClienteFormats],
         };
       } catch (e: any) {
-        results.all_boletos_search = { error: e.message };
+        results.generic_search_analysis = { error: e.message };
       }
 
       // 4. Check local DB
