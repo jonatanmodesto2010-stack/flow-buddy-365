@@ -68,6 +68,8 @@ const Dashboard = () => {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
+  const getOpenValue = (b: BoletoData) => Number(b.boleto_value_open ?? b.boleto_value) || 0;
+
   // Extract unique filiais
   const filiais = useMemo(() => {
     const map = new Map<string, string>();
