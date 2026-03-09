@@ -19,6 +19,7 @@ interface Event {
   isNew?: boolean;
   time?: string;
   created_at?: string;
+  ixc_alert_line?: string;
 }
 
 interface ClientInfo {
