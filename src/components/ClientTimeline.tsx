@@ -231,11 +231,22 @@ export const ClientTimeline = ({ clientId, clientName, onClose }: ClientTimeline
           .single();
 
         if (timelineData?.client_id && timelineData?.organization_id) {
+          // Buscar created_at real do evento recém-salvo no banco
+          const { data: dbEvents } = await supabase
+            .from('timeline_events')
+            .select('created_at, description')
+            .eq('line_id', editingLineId)
+            .eq('description', event.description)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          const eventCreatedAt = dbEvents?.[0]?.created_at || undefined;
+
           const { data: ixcResult, error: ixcError } = await supabase.functions.invoke('ixc-update-alert', {
             body: {
               organization_id: timelineData.organization_id,
               ixc_client_id: timelineData.client_id,
               alert_text: event.description,
+              event_created_at: eventCreatedAt,
             },
           });
 
