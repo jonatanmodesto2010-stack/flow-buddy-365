@@ -300,6 +300,12 @@ export const IntegrationsSettings = () => {
             <Input value={apiUrlContracts} onChange={(e) => setApiUrlContracts(e.target.value)} placeholder="URL alternativa para consultar contratos" />
           </div>
 
+          <div>
+            <label className="text-sm font-medium block mb-1">ID do Assunto de Retirada (IXC)</label>
+            <Input value={osRetiradaAssuntoId} onChange={(e) => setOsRetiradaAssuntoId(e.target.value)} placeholder="ID do assunto de retirada de equipamento no IXC" />
+            <p className="text-xs text-muted-foreground mt-1">Utilizado para buscar OS de retirada de equipamento no Dashboard</p>
+          </div>
+
           <div className="flex flex-wrap gap-3 pt-2">
             <Button onClick={handleTestConnection} variant="outline" disabled={testing}>
               {testing && <Loader2 size={16} className="mr-2 animate-spin" />}

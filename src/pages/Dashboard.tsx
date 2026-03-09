@@ -402,6 +402,7 @@ const Dashboard = () => {
                 </div>
 
                 <CollectionActionsWidget />
+                <EquipmentRetrievalWidget />
                 <AgreementsOverdueWidget />
                 <ClientPriorityList timelines={filteredTimelines} boletos={filteredBoletos} />
               </>
