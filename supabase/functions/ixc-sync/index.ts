@@ -931,6 +931,7 @@ Deno.serve(async (req) => {
                 p_values: chunk.map(b => b.boleto_value),
                 p_dates: chunk.map(b => b.due_date),
                 p_statuses: chunk.map(b => b.status),
+                p_values_open: chunk.map(b => b.boleto_value_open),
               });
               if (error) orgResult.errors.push(`Boleto update error: ${error.message}`);
             }
