@@ -180,6 +180,7 @@ export const IntegrationsSettings = () => {
             api_url: apiUrl || null,
             api_token: apiToken || null,
             api_url_contracts: apiUrlContracts || null,
+            ixc_os_retirada_assunto_id: osRetiradaAssuntoId || null,
             is_active: isActive,
           })
           .eq('id', integration.id);
