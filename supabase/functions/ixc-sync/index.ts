@@ -832,16 +832,26 @@ Deno.serve(async (req) => {
           if (timelineIds.length > 0) {
             for (let i = 0; i < timelineIds.length; i += 200) {
               const chunk = timelineIds.slice(i, i + 200);
-              const { data } = await supabase
-                .from('client_boletos')
-                .select('id, ixc_boleto_id, timeline_id, status, boleto_value, due_date')
-                .in('timeline_id', chunk)
-                .not('ixc_boleto_id', 'is', null);
-              for (const b of (data || [])) {
-                if (b.ixc_boleto_id) existingBoletos.set(b.ixc_boleto_id, b);
+              // Paginate within each chunk to avoid 1000-row limit
+              let boletoFrom = 0;
+              const BOLETO_PAGE = 1000;
+              while (true) {
+                const { data } = await supabase
+                  .from('client_boletos')
+                  .select('id, ixc_boleto_id, timeline_id, status, boleto_value, due_date')
+                  .in('timeline_id', chunk)
+                  .not('ixc_boleto_id', 'is', null)
+                  .range(boletoFrom, boletoFrom + BOLETO_PAGE - 1);
+                if (!data || data.length === 0) break;
+                for (const b of data) {
+                  if (b.ixc_boleto_id) existingBoletos.set(b.ixc_boleto_id, b);
+                }
+                if (data.length < BOLETO_PAGE) break;
+                boletoFrom += BOLETO_PAGE;
               }
             }
           }
+          console.log(`[sync_boletos] Loaded ${existingBoletos.size} existing boletos from DB`);
 
           const boletosToInsert: any[] = [];
           const boletosToUpdate: { id: string; status: string; boleto_value: number; due_date: string }[] = [];
@@ -878,14 +888,37 @@ Deno.serve(async (req) => {
             }
           }
 
+          let totalInserted = 0;
+          let totalFailed = 0;
           if (boletosToInsert.length > 0) {
             for (let i = 0; i < boletosToInsert.length; i += 200) {
               if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
               const chunk = boletosToInsert.slice(i, i + 200);
+              const chunkIndex = Math.floor(i / 200);
               const { error } = await supabase.from('client_boletos').insert(chunk);
-              if (error) orgResult.errors.push(`Boleto insert error: ${error.message}`);
+              if (error) {
+                console.error(`[sync_boletos] Chunk ${chunkIndex} failed (${chunk.length} records): ${error.message}`);
+                // Fallback: insert individually
+                let chunkSaved = 0;
+                let chunkFailed = 0;
+                for (const boleto of chunk) {
+                  const { error: singleError } = await supabase.from('client_boletos').insert([boleto]);
+                  if (singleError) {
+                    chunkFailed++;
+                    console.error(`[sync_boletos] Individual insert failed - ixc_id: ${boleto.ixc_boleto_id}, client_timeline: ${boleto.timeline_id}, due: ${boleto.due_date}, value: ${boleto.boleto_value}, error: ${singleError.message}`);
+                  } else {
+                    chunkSaved++;
+                  }
+                }
+                console.log(`[sync_boletos] Chunk ${chunkIndex} fallback: ${chunkSaved} saved, ${chunkFailed} failed`);
+                totalInserted += chunkSaved;
+                totalFailed += chunkFailed;
+              } else {
+                totalInserted += chunk.length;
+              }
             }
           }
+          console.log(`[sync_boletos] Insert summary: ${totalInserted} saved, ${totalFailed} failed out of ${boletosToInsert.length} total`);
 
           if (boletosToUpdate.length > 0) {
             for (let i = 0; i < boletosToUpdate.length; i += 500) {
@@ -902,8 +935,10 @@ Deno.serve(async (req) => {
           }
 
           orgResult.boletos = boletos.length;
-          orgResult.boletos_inserted = boletosToInsert.length;
+          orgResult.boletos_inserted = totalInserted;
+          orgResult.boletos_failed = totalFailed;
           orgResult.boletos_updated = boletosToUpdate.length;
+          orgResult.existing_boletos_detected = existingBoletos.size;
           console.log(`[sync] Boleto sync done in ${((Date.now() - boletoStart) / 1000).toFixed(1)}s`);
         }
 
