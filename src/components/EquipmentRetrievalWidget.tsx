@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Package, ChevronLeft, ChevronRight, Copy } from 'lucide-react';
+import { Package, ChevronLeft, ChevronRight, Copy, Settings } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
 
 interface OSRetirada {
   id: string;
@@ -46,24 +46,62 @@ export const EquipmentRetrievalWidget = () => {
   const [osList, setOsList] = useState<OSRetirada[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
+  const [notConfigured, setNotConfigured] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { organizationId } = useUserRole();
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  console.log('[EquipmentRetrievalWidget] Componente montado');
+
   const fetchOS = useCallback(async () => {
-    if (!organizationId) return;
+    console.log('[EquipmentRetrievalWidget] fetchOS chamado, organizationId:', organizationId);
+    if (!organizationId) {
+      console.log('[EquipmentRetrievalWidget] organizationId não encontrado');
+      setLoading(false);
+      return;
+    }
+
+    // Check if assunto_id is configured
     try {
+      const { data: integration } = await supabase
+        .from('organization_integrations')
+        .select('ixc_os_retirada_assunto_id')
+        .eq('organization_id', organizationId)
+        .eq('integration_type', 'ixc')
+        .eq('is_active', true)
+        .maybeSingle();
+
+      console.log('[EquipmentRetrievalWidget] integration data:', integration);
+
+      if (!integration?.ixc_os_retirada_assunto_id) {
+        console.log('[EquipmentRetrievalWidget] ixc_os_retirada_assunto_id NÃO configurado');
+        setNotConfigured(true);
+        setLoading(false);
+        return;
+      }
+
+      setNotConfigured(false);
+    } catch (err) {
+      console.error('[EquipmentRetrievalWidget] Erro ao verificar configuração:', err);
+    }
+
+    try {
+      console.log('[EquipmentRetrievalWidget] Chamando edge function ixc-os-retirada');
       const { data, error } = await supabase.functions.invoke('ixc-os-retirada', {
         body: { organization_id: organizationId },
       });
+      console.log('[EquipmentRetrievalWidget] Resposta da edge function:', { data, error });
       if (error) {
-        console.error('OS retirada fetch error:', error);
+        console.error('[EquipmentRetrievalWidget] Erro na edge function:', error);
+        setLoading(false);
         return;
       }
-      setOsList(data?.os_list || []);
+      const list = data?.os_list || [];
+      console.log('[EquipmentRetrievalWidget] OS recebidas:', list.length);
+      setOsList(list);
     } catch (err) {
-      console.error('OS retirada error:', err);
+      console.error('[EquipmentRetrievalWidget] Erro geral:', err);
     } finally {
       setLoading(false);
     }
@@ -82,7 +120,6 @@ export const EquipmentRetrievalWidget = () => {
   const pagedItems = osList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const handleItemClick = (os: OSRetirada) => {
-    // Try to navigate to clients filtered by the client name
     if (os.id_cliente) {
       navigate(`/clients?search=${encodeURIComponent(os.cliente_nome)}`);
     } else {
@@ -97,31 +134,28 @@ export const EquipmentRetrievalWidget = () => {
     toast({ title: 'ID copiado', description: `OS #${os.id}` });
   };
 
+  // Render inline content (no card wrapper)
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.45 }}
-      className="bg-card border border-border rounded-xl p-5"
-    >
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Package size={16} />
-          📦 OS de Retirada de Equipamento
-        </h3>
-        {osList.length > 0 && (
-          <span className="text-xs text-muted-foreground">{osList.length} registro(s)</span>
-        )}
-      </div>
+    <div>
+      <Separator className="my-4" />
+      <h4 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
+        <Package size={16} />
+        📦 OS de Retirada
+      </h4>
 
       {loading ? (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-14 bg-muted animate-pulse rounded-lg" />
+            <div key={i} className="h-12 bg-muted animate-pulse rounded-lg" />
           ))}
         </div>
+      ) : notConfigured ? (
+        <div className="py-4 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
+          <Settings size={20} className="text-muted-foreground/60" />
+          Configure o ID do assunto de retirada nas integrações para visualizar as OS
+        </div>
       ) : osList.length === 0 ? (
-        <div className="py-8 text-center text-sm text-muted-foreground">
+        <div className="py-4 text-center text-sm text-muted-foreground">
           Nenhuma retirada de equipamento pendente
         </div>
       ) : (
@@ -185,6 +219,6 @@ export const EquipmentRetrievalWidget = () => {
           )}
         </>
       )}
-    </motion.div>
+    </div>
   );
 };

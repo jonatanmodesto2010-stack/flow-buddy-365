@@ -673,6 +673,9 @@ export const CalendarView = ({
               <span className="text-sm text-muted-foreground">Não Respondeu</span>
             </div>
           </div>
+
+          {/* OS de Retirada - embedded inside Status dos Eventos card */}
+          <EquipmentRetrievalWidget />
         </div>
       </motion.div>
 
