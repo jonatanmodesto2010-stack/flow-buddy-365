@@ -832,16 +832,26 @@ Deno.serve(async (req) => {
           if (timelineIds.length > 0) {
             for (let i = 0; i < timelineIds.length; i += 200) {
               const chunk = timelineIds.slice(i, i + 200);
-              const { data } = await supabase
-                .from('client_boletos')
-                .select('id, ixc_boleto_id, timeline_id, status, boleto_value, due_date')
-                .in('timeline_id', chunk)
-                .not('ixc_boleto_id', 'is', null);
-              for (const b of (data || [])) {
-                if (b.ixc_boleto_id) existingBoletos.set(b.ixc_boleto_id, b);
+              // Paginate within each chunk to avoid 1000-row limit
+              let boletoFrom = 0;
+              const BOLETO_PAGE = 1000;
+              while (true) {
+                const { data } = await supabase
+                  .from('client_boletos')
+                  .select('id, ixc_boleto_id, timeline_id, status, boleto_value, due_date')
+                  .in('timeline_id', chunk)
+                  .not('ixc_boleto_id', 'is', null)
+                  .range(boletoFrom, boletoFrom + BOLETO_PAGE - 1);
+                if (!data || data.length === 0) break;
+                for (const b of data) {
+                  if (b.ixc_boleto_id) existingBoletos.set(b.ixc_boleto_id, b);
+                }
+                if (data.length < BOLETO_PAGE) break;
+                boletoFrom += BOLETO_PAGE;
               }
             }
           }
+          console.log(`[sync_boletos] Loaded ${existingBoletos.size} existing boletos from DB`);
 
           const boletosToInsert: any[] = [];
           const boletosToUpdate: { id: string; status: string; boleto_value: number; due_date: string }[] = [];
