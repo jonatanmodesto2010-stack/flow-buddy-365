@@ -743,15 +743,26 @@ Deno.serve(async (req) => {
 
           if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
 
-          // Get existing timelines
-          const { data: existingTimelines } = await supabase
-            .from('client_timelines')
-            .select('id, client_id')
-            .eq('organization_id', organization_id);
+          // Get ALL existing timelines with pagination
+          const allTimelinesAR: any[] = [];
+          let arFrom = 0;
+          const AR_PAGE = 1000;
+          while (true) {
+            const { data: page } = await supabase
+              .from('client_timelines')
+              .select('id, client_id')
+              .eq('organization_id', organization_id)
+              .range(arFrom, arFrom + AR_PAGE - 1);
+            if (!page || page.length === 0) break;
+            allTimelinesAR.push(...page);
+            if (page.length < AR_PAGE) break;
+            arFrom += AR_PAGE;
+          }
+          console.log(`[sync_areceber] Loaded ${allTimelinesAR.length} timelines for receivables mapping`);
 
           const clientToTimeline = new Map<string, string>();
           const knownClientIds = new Set<string>();
-          for (const t of (existingTimelines || [])) {
+          for (const t of allTimelinesAR) {
             if (t.client_id) {
               clientToTimeline.set(t.client_id, t.id);
               knownClientIds.add(t.client_id);
