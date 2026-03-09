@@ -5,36 +5,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// ==================== HELPERS ====================
+
 function encodeIxcToken(rawToken: string): string {
-  // Debug: log the token format (without exposing the actual token)
-  console.log(`[DEBUG] Token format - length: ${rawToken.length}, has colon: ${rawToken.includes(':')}`);
-  
-  if (rawToken.includes(':')) {
-    return btoa(rawToken);
-  }
+  if (rawToken.includes(':')) return btoa(rawToken);
   return btoa(`${rawToken}:`);
 }
 
-// Try different authentication formats
 function getAlternativeTokenFormats(rawToken: string): string[] {
-  const formats = [];
-  
-  // Format 1: token: (current)
-  formats.push(btoa(`${rawToken}:`));
-  
-  // Format 2: token (without colon)
-  formats.push(btoa(rawToken));
-  
-  // Format 3: Raw token (not base64 encoded)
-  formats.push(rawToken);
-  
-  // Format 4: Common username:password format if token looks like it might be a password
+  const formats = [btoa(`${rawToken}:`), btoa(rawToken), rawToken];
   if (rawToken.length === 64) {
-    formats.push(btoa(`admin:${rawToken}`));
-    formats.push(btoa(`root:${rawToken}`));
-    formats.push(btoa(`user:${rawToken}`));
+    formats.push(btoa(`admin:${rawToken}`), btoa(`root:${rawToken}`), btoa(`user:${rawToken}`));
   }
-  
   return formats;
 }
 
@@ -53,27 +35,19 @@ async function ixcRequest(apiUrl: string, encodedToken: string, endpoint: string
     ...extraBody,
   };
 
-  console.log(`[DEBUG] Making request to: ${url}`);
-  console.log(`[DEBUG] Request body:`, JSON.stringify(body, null, 2));
-  console.log(`[DEBUG] Auth header present: ${!!encodedToken}`);
-
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Basic ${encodedToken}`,
       'ixcsoft': 'listar',
-      'User-Agent': 'Lovable-IXC-Sync/1.0',
+      'User-Agent': 'Lovable-IXC-Sync/2.0',
     },
     body: JSON.stringify(body),
   });
 
-  console.log(`[DEBUG] Response status: ${res.status}`);
-  console.log(`[DEBUG] Response headers:`, Object.fromEntries(res.headers.entries()));
-
   if (!res.ok) {
     const text = await res.text();
-    console.error(`[ERROR] IXC API failed - Status: ${res.status}, Response: ${text.substring(0, 500)}`);
     throw new Error(`IXC API error ${res.status}: ${text}`);
   }
 
@@ -84,81 +58,221 @@ async function ixcRequest(apiUrl: string, encodedToken: string, endpoint: string
   };
 }
 
-// Helper: check if sync was cancelled
 async function checkCancelled(supabase: any, syncId: string): Promise<boolean> {
-  const { data } = await supabase
-    .from('integration_sync_log')
-    .select('status')
-    .eq('id', syncId)
-    .single();
+  const { data } = await supabase.from('integration_sync_log').select('status').eq('id', syncId).single();
   return data?.status === 'cancelled';
 }
 
-// Helper: update sync log progress
 async function updateSyncLog(supabase: any, syncId: string, updates: Record<string, any>) {
-  await supabase
-    .from('integration_sync_log')
-    .update({ ...updates })
-    .eq('id', syncId);
+  await supabase.from('integration_sync_log').update(updates).eq('id', syncId);
 }
 
-async function fetchAllIxcRecordsWithProgress(
+// ==================== SYNC METRICS ====================
+
+interface SyncFallback {
+  endpoint: string;
+  reason: string;
+  mode: string;
+  recordsProcessed: number;
+}
+
+interface SyncMetrics {
+  mode: 'incremental' | 'full';
+  previousLastSyncAt: string | null;
+  syncStartedAt: string;
+  cutoffUsed: string | null;
+  pagesProcessed: number;
+  totalRecordsFromIxc: number;
+  inserts: number;
+  updates: number;
+  ignored: number;
+  fallbacks: SyncFallback[];
+  durations: { phase: string; seconds: number }[];
+  totalDurationSeconds: number;
+}
+
+function createMetrics(syncStartedAt: string, lastSyncAt: string | null): SyncMetrics {
+  return {
+    mode: lastSyncAt ? 'incremental' : 'full',
+    previousLastSyncAt: lastSyncAt,
+    syncStartedAt,
+    cutoffUsed: null,
+    pagesProcessed: 0,
+    totalRecordsFromIxc: 0,
+    inserts: 0,
+    updates: 0,
+    ignored: 0,
+    fallbacks: [],
+    durations: [],
+    totalDurationSeconds: 0,
+  };
+}
+
+function logSyncSummary(label: string, metrics: SyncMetrics) {
+  console.log(`\n[SYNC SUMMARY] ${label}`);
+  console.log(`  Mode: ${metrics.mode}`);
+  console.log(`  Previous last_sync_at: ${metrics.previousLastSyncAt || 'null (first run)'}`);
+  console.log(`  sync_started_at (new cursor): ${metrics.syncStartedAt}`);
+  console.log(`  Cutoff used: ${metrics.cutoffUsed || 'N/A'}`);
+  console.log(`  Pages processed: ${metrics.pagesProcessed}`);
+  console.log(`  Total records from IXC: ${metrics.totalRecordsFromIxc}`);
+  console.log(`  Inserts: ${metrics.inserts}`);
+  console.log(`  Updates: ${metrics.updates}`);
+  console.log(`  Ignored: ${metrics.ignored}`);
+  console.log(`  Fallbacks: ${metrics.fallbacks.length}`);
+  for (const fb of metrics.fallbacks) {
+    console.log(`    [FALLBACK] ${fb.endpoint}: ${fb.reason} → ${fb.mode} (${fb.recordsProcessed} records)`);
+  }
+  for (const d of metrics.durations) {
+    console.log(`  ${d.phase}: ${d.seconds.toFixed(1)}s`);
+  }
+  console.log(`  Total duration: ${metrics.totalDurationSeconds.toFixed(1)}s\n`);
+}
+
+// ==================== INCREMENTAL HELPERS ====================
+
+function computeCutoff(lastSyncAt: string): string {
+  // 5-minute safety window
+  const dt = new Date(lastSyncAt);
+  dt.setMinutes(dt.getMinutes() - 5);
+  return dt.toISOString().replace('T', ' ').substring(0, 19);
+}
+
+function buildIncrementalGridParam(cutoff: string, existingGridParam?: string): string {
+  const filters = existingGridParam ? JSON.parse(existingGridParam) : [];
+  filters.push({ TB: 'data_alteracao', OP: '>=', P: cutoff });
+  return JSON.stringify(filters);
+}
+
+// Try incremental fetch; if it fails, fallback to full scan
+async function tryIncrementalRequest(
+  apiUrl: string, token: string, endpoint: string, 
+  cutoff: string, extraBody: Record<string, any> = {}
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const testBody = { ...extraBody };
+    const existingGrid = testBody.grid_param;
+    testBody.grid_param = buildIncrementalGridParam(cutoff, existingGrid);
+    await ixcRequest(apiUrl, token, endpoint, 1, 1, testBody);
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+// ==================== STREAM PROCESSING ====================
+
+const PARALLEL_PAGES = 3;
+const INTER_BATCH_DELAY = 50;
+const BATCH_SIZE = 500;
+
+interface StreamResult {
+  totalRecords: number;
+  pagesProcessed: number;
+}
+
+/**
+ * Process IXC records page-by-page with parallel fetching.
+ * Records are processed and discarded — never accumulated in memory.
+ */
+async function processIxcStreaming(
   apiUrl: string, token: string, endpoint: string,
   supabase: any, syncId: string,
+  processPage: (registros: any[]) => Promise<void>,
   extraBody: Record<string, any> = {},
-  progressOffset = 0
-) {
-  const all: any[] = [];
-  let page = 1;
+  progressOffset = 0,
+): Promise<StreamResult> {
   const perPage = 1000;
-
-  // Get total first
+  
+  // First request to get total
   const first = await ixcRequest(apiUrl, token, endpoint, 1, perPage, extraBody);
-  all.push(...first.registros);
   const totalRecords = first.total;
 
   await updateSyncLog(supabase, syncId, {
-    records_processed: progressOffset + all.length,
     total_records: progressOffset + totalRecords,
+    records_processed: progressOffset + first.registros.length,
   });
 
-  if (all.length < totalRecords && first.registros.length >= perPage) {
-    page = 2;
-    while (all.length < totalRecords) {
+  if (first.registros.length > 0) {
+    await processPage(first.registros);
+  }
+
+  let processedCount = first.registros.length;
+  let pagesProcessed = 1;
+
+  if (first.registros.length >= perPage && processedCount < totalRecords) {
+    let nextPage = 2;
+    const totalPages = Math.ceil(totalRecords / perPage);
+
+    while (nextPage <= totalPages) {
       if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
 
-      await delay(150); // Small delay to avoid rate limiting
+      // Fetch PARALLEL_PAGES pages in parallel
+      const pagesToFetch = Math.min(PARALLEL_PAGES, totalPages - nextPage + 1);
+      const promises = [];
+      for (let i = 0; i < pagesToFetch; i++) {
+        promises.push(ixcRequest(apiUrl, token, endpoint, nextPage + i, perPage, extraBody));
+      }
 
-      const { registros } = await ixcRequest(apiUrl, token, endpoint, page, perPage, extraBody);
-      if (!registros.length) break;
-      all.push(...registros);
+      const results = await Promise.all(promises);
+
+      for (const result of results) {
+        if (result.registros.length > 0) {
+          await processPage(result.registros);
+          processedCount += result.registros.length;
+          pagesProcessed++;
+        }
+      }
 
       await updateSyncLog(supabase, syncId, {
-        records_processed: progressOffset + all.length,
-        total_records: progressOffset + totalRecords,
+        records_processed: progressOffset + processedCount,
       });
 
-      if (registros.length < perPage) break;
-      page++;
+      nextPage += pagesToFetch;
+
+      if (results.some(r => r.registros.length < perPage)) break;
+      if (processedCount >= totalRecords) break;
+
+      await delay(INTER_BATCH_DELAY);
     }
   }
 
+  return { totalRecords, pagesProcessed };
+}
+
+// ==================== PAGINATED DB LOADER ====================
+
+async function loadAllPaginated(supabase: any, table: string, select: string, filters: Record<string, any>): Promise<any[]> {
+  const all: any[] = [];
+  let from = 0;
+  const PAGE = 1000;
+  while (true) {
+    let query = supabase.from(table).select(select).range(from, from + PAGE - 1);
+    for (const [key, value] of Object.entries(filters)) {
+      query = query.eq(key, value);
+    }
+    const { data } = await query;
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
   return all;
 }
+
+// ==================== SMALL TABLE FETCHERS ====================
 
 async function fetchAllIxcRecords(apiUrl: string, token: string, endpoint: string, extraBody: Record<string, any> = {}) {
   const all: any[] = [];
   let page = 1;
   const perPage = 1000;
-
   while (true) {
     const { registros, total } = await ixcRequest(apiUrl, token, endpoint, page, perPage, extraBody);
     all.push(...registros);
     if (all.length >= total || registros.length < perPage) break;
-    await delay(150);
+    await delay(50);
     page++;
   }
-
   return all;
 }
 
@@ -169,11 +283,13 @@ async function fetchFiliais(apiUrl: string, token: string): Promise<Map<string, 
     for (const f of filiais) {
       filialMap.set(String(f.id), f.razao || f.fantasia || `Filial ${f.id}`);
     }
-  } catch (e) {
+  } catch (e: any) {
     console.log('Could not fetch filiais:', e.message);
   }
   return filialMap;
 }
+
+// ==================== MAIN HANDLER ====================
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -184,7 +300,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
-    // Test connection with multiple authentication formats
+    // ==================== TEST CONNECTION ====================
     if (action === 'test') {
       const { api_url, api_token } = body;
       if (!api_url || !api_token) {
@@ -193,71 +309,32 @@ Deno.serve(async (req) => {
         });
       }
 
-      console.log(`[TEST] Testing connection to: ${api_url}`);
-      console.log(`[TEST] Token provided: ${api_token ? 'Yes' : 'No'} (length: ${api_token?.length || 0})`);
-
-      // Try different authentication formats
       const tokenFormats = getAlternativeTokenFormats(api_token);
-      console.log(`[TEST] Will try ${tokenFormats.length} different auth formats`);
-
-      let lastError = null;
+      let lastError: any = null;
 
       for (let i = 0; i < tokenFormats.length; i++) {
-        const format = tokenFormats[i];
-        console.log(`[TEST] Trying format ${i + 1}/${tokenFormats.length}...`);
-
         try {
-          const { total } = await ixcRequest(api_url, format, 'cliente', 1, 1);
-          console.log(`[TEST] SUCCESS with format ${i + 1}! Found ${total} total clients`);
-
-          const { total: activeTotal } = await ixcRequest(api_url, format, 'cliente', 1, 1, {
-            qtype: 'ativo',
-            query: 'S',
-            oper: '=',
+          const { total } = await ixcRequest(api_url, tokenFormats[i], 'cliente', 1, 1);
+          const { total: activeTotal } = await ixcRequest(api_url, tokenFormats[i], 'cliente', 1, 1, {
+            qtype: 'ativo', query: 'S', oper: '=',
           });
-
-          return new Response(JSON.stringify({ 
-            success: true, 
-            total_clients: total, 
-            active_clients: activeTotal,
+          return new Response(JSON.stringify({
+            success: true, total_clients: total, active_clients: activeTotal,
             auth_format_used: i + 1,
-            message: `Conexão testada com sucesso (formato de autenticação ${i + 1})` 
-          }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-
+          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         } catch (error: any) {
-          console.log(`[TEST] Format ${i + 1} failed: ${error.message.substring(0, 100)}`);
           lastError = error;
-          
-          // If not a 401 error, break (it's probably a different issue)
-          if (!error.message.includes('401')) {
-            break;
-          }
+          if (!error.message.includes('401')) break;
         }
       }
 
-      // All formats failed
-      console.error(`[TEST] All authentication formats failed. Last error:`, lastError?.message);
-      
-      return new Response(JSON.stringify({ 
-        error: 'Falha na autenticação com todos os formatos testados',
-        details: 'Token pode estar incorreto, expirado ou servidor pode ter restrições de IP',
-        formats_tested: tokenFormats.length,
-        last_error: lastError?.message || 'Erro desconhecido',
-        suggestions: [
-          'Verifique se o token está correto e ativo no painel do IXC',
-          'Confirme se a URL da API está correta',
-          'Verifique se há restrições de IP no servidor IXC',
-          'Contate o suporte do IXC para verificar o formato correto da API'
-        ]
-      }), {
-        status: 401, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(JSON.stringify({
+        error: 'Falha na autenticação',
+        details: lastError?.message || 'Erro desconhecido',
+      }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Diagnostic action
+    // ==================== DIAGNOSTIC ACTIONS (kept as-is) ====================
     if (action === 'diagnose_blocked') {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -292,7 +369,6 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify(results), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Inspect fn_areceber fields
     if (action === 'inspect_areceber') {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -305,9 +381,7 @@ Deno.serve(async (req) => {
       try {
         const { registros, total } = await ixcRequest(int.api_url, token, 'fn_areceber', 1, 5);
         return new Response(JSON.stringify({
-          endpoint: 'fn_areceber',
-          total_records: total,
-          sample_count: registros.length,
+          endpoint: 'fn_areceber', total_records: total,
           fields: registros.length > 0 ? Object.keys(registros[0]) : [],
           sample_records: registros.slice(0, 3),
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -316,168 +390,50 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Diagnose specific client boletos in IXC
     if (action === 'diagnose_client') {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supa = createClient(supabaseUrl, supabaseKey);
       const org_id = body.organization_id;
       const clientIxcId = String(body.client_ixc_id || '');
-      
-      if (!clientIxcId) {
-        return new Response(JSON.stringify({ error: 'client_ixc_id is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
-
+      if (!clientIxcId) return new Response(JSON.stringify({ error: 'client_ixc_id is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       const { data: int } = await supa.from('organization_integrations').select('api_url, api_token').eq('organization_id', org_id).eq('integration_type', 'ixc').single();
       if (!int) return new Response(JSON.stringify({ error: 'No integration found' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       const token = encodeIxcToken(int.api_token);
-
       const results: any = { client_ixc_id: clientIxcId };
 
-      // 1. Search fn_areceber by id_cliente
       try {
         const url = `${int.api_url.replace(/\/$/, '')}/fn_areceber`;
-        const requestBody = {
-          qtype: 'id_cliente',
-          query: clientIxcId,
-          oper: '=',
-          page: '1',
-          rp: '100',
-          sortname: 'id',
-          sortorder: 'asc',
-        };
-        
-        console.log(`[diagnose] Request to fn_areceber:`, JSON.stringify(requestBody));
-        
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Basic ${token}`,
-            'ixcsoft': 'listar',
-          },
-          body: JSON.stringify(requestBody),
-        });
-        
+        const requestBody = { qtype: 'id_cliente', query: clientIxcId, oper: '=', page: '1', rp: '100', sortname: 'id', sortorder: 'asc' };
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${token}`, 'ixcsoft': 'listar' }, body: JSON.stringify(requestBody) });
         const rawText = await res.text();
-        console.log(`[diagnose] fn_areceber response status: ${res.status}, body length: ${rawText.length}`);
-        
         let parsed: any;
         try { parsed = JSON.parse(rawText); } catch { parsed = { raw: rawText.substring(0, 2000) }; }
-        
         results.fn_areceber_by_id_cliente = {
-          request: requestBody,
-          status: res.status,
-          total: parsed.total || 0,
+          request: requestBody, status: res.status, total: parsed.total || 0,
           records_count: parsed.registros?.length || 0,
           sample_records: (parsed.registros || []).slice(0, 5).map((r: any) => ({
-            id: r.id,
-            id_cliente: r.id_cliente,
-            id_contrato: r.id_contrato,
-            valor: r.valor,
-            valor_aberto: r.valor_aberto,
-            data_vencimento: r.data_vencimento,
-            status: r.status,
-            liquidado: r.liquidado,
-            data_emissao: r.data_emissao,
-            tipo_cobranca: r.tipo_cobranca,
+            id: r.id, id_cliente: r.id_cliente, id_contrato: r.id_contrato, valor: r.valor, valor_aberto: r.valor_aberto, data_vencimento: r.data_vencimento, status: r.status, liquidado: r.liquidado,
           })),
         };
-      } catch (e: any) {
-        results.fn_areceber_by_id_cliente = { error: e.message };
-      }
+      } catch (e: any) { results.fn_areceber_by_id_cliente = { error: e.message }; }
 
-      // 2. Search contracts for this client
       try {
-        const { registros, total } = await ixcRequest(int.api_url, token, 'cliente_contrato', 1, 50, {
-          qtype: 'id_cliente',
-          query: clientIxcId,
-          oper: '=',
-        });
-        results.contracts = {
-          total,
-          records: registros.map((r: any) => ({
-            id: r.id,
-            id_cliente: r.id_cliente,
-            status: r.status,
-            status_internet: r.status_internet,
-          })),
-        };
-      } catch (e: any) {
-        results.contracts = { error: e.message };
-      }
+        const { registros, total } = await ixcRequest(int.api_url, token, 'cliente_contrato', 1, 50, { qtype: 'id_cliente', query: clientIxcId, oper: '=' });
+        results.contracts = { total, records: registros.map((r: any) => ({ id: r.id, id_cliente: r.id_cliente, status: r.status, status_internet: r.status_internet })) };
+      } catch (e: any) { results.contracts = { error: e.message }; }
 
-      // 3. Search for specific boleto IDs in generic search to check id_cliente format
-      try {
-        // Fetch the page where boleto 37975 would be (id > 37000)
-        const { registros: targetPage } = await ixcRequest(int.api_url, token, 'fn_areceber', 1, 100, {
-          qtype: 'id',
-          query: '37970',
-          oper: '>',
-        });
-        const boleto37975 = targetPage.find((r: any) => String(r.id) === '37975');
-        
-        // Also search first page for any with this client id
-        const { registros: firstPage } = await ixcRequest(int.api_url, token, 'fn_areceber', 1, 1000);
-        const clientBoletosPage1 = firstPage.filter((r: any) => String(r.id_cliente) === clientIxcId);
-        
-        // Check ALL unique id_cliente formats in first page
-        const idClienteFormats = new Set(firstPage.slice(0, 5).map((r: any) => `type=${typeof r.id_cliente}, value="${r.id_cliente}", len=${String(r.id_cliente).length}`));
-        
-        results.generic_search_analysis = {
-          boleto_37975_found: !!boleto37975,
-          boleto_37975_data: boleto37975 ? {
-            id: boleto37975.id,
-            id_cliente: boleto37975.id_cliente,
-            id_cliente_type: typeof boleto37975.id_cliente,
-            id_cliente_length: String(boleto37975.id_cliente).length,
-            id_cliente_trimmed: String(boleto37975.id_cliente).trim(),
-            id_cliente_matches_2173: String(boleto37975.id_cliente) === '2173',
-            id_cliente_trim_matches_2173: String(boleto37975.id_cliente).trim() === '2173',
-            valor: boleto37975.valor,
-            status: boleto37975.status,
-          } : null,
-          first_page_client_matches: clientBoletosPage1.length,
-          target_page_records: targetPage.length,
-          target_page_client_ids: targetPage.filter((r: any) => String(r.id_cliente) === clientIxcId).length,
-          id_cliente_format_samples: [...idClienteFormats],
-        };
-      } catch (e: any) {
-        results.generic_search_analysis = { error: e.message };
-      }
-
-      // 4. Check local DB
-      const { data: localClient } = await supa
-        .from('client_timelines')
-        .select('id, client_id, client_name, is_active, status')
-        .eq('organization_id', org_id)
-        .eq('client_id', clientIxcId)
-        .maybeSingle();
+      const { data: localClient } = await supa.from('client_timelines').select('id, client_id, client_name, is_active, status').eq('organization_id', org_id).eq('client_id', clientIxcId).maybeSingle();
       results.local_client = localClient;
-
       if (localClient) {
-        const { data: localBoletos, count } = await supa
-          .from('client_boletos')
-          .select('*', { count: 'exact' })
-          .eq('timeline_id', localClient.id)
-          .limit(5);
+        const { data: localBoletos, count } = await supa.from('client_boletos').select('*', { count: 'exact' }).eq('timeline_id', localClient.id).limit(5);
         results.local_boletos = { count, sample: localBoletos };
       }
 
-      // 5. Check the sync mapping
-      const { data: allTimelines } = await supa
-        .from('client_timelines')
-        .select('id, client_id')
-        .eq('organization_id', org_id)
-        .eq('client_id', clientIxcId);
-      results.timeline_mapping = {
-        timelines_with_this_client_id: allTimelines?.length || 0,
-        timelines: allTimelines,
-      };
-
       return new Response(JSON.stringify(results, null, 2), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-    // Full sync or boleto sync
+
+    // ==================== SYNC ACTIONS ====================
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -486,31 +442,24 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (action !== 'cron') {
       if (!authHeader) {
-        return new Response(JSON.stringify({ error: 'Não autorizado' }), {
-          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return new Response(JSON.stringify({ error: 'Não autorizado' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      const userToken = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: authError } = await supabase.auth.getUser(userToken);
       if (authError || !user) {
-        return new Response(JSON.stringify({ error: 'Token inválido' }), {
-          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return new Response(JSON.stringify({ error: 'Token inválido' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
     }
 
-    // Get organization integrations
+    // Get integrations
     let orgFilter: string | null = body.organization_id || null;
-
     const intQuery = supabase.from('organization_integrations').select('*').eq('integration_type', 'ixc').eq('is_active', true);
     if (orgFilter) intQuery.eq('organization_id', orgFilter);
     const { data: integrations, error: intError } = await intQuery;
     if (intError) throw intError;
 
     if (!integrations || integrations.length === 0) {
-      return new Response(JSON.stringify({ message: 'Nenhuma integração ativa encontrada' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(JSON.stringify({ message: 'Nenhuma integração ativa encontrada' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const results: any[] = [];
@@ -522,32 +471,79 @@ Deno.serve(async (req) => {
       const token = encodeIxcToken(api_token);
       const orgResult: any = { organization_id, clients: 0, boletos: 0, errors: [] };
 
-      // Create sync log entry
+      // Capture sync_started_at BEFORE any processing
+      const syncStartedAt = new Date().toISOString();
+
       const syncType = action === 'sync_boletos' ? 'boletos' : action === 'sync_clients' ? 'clients' : action === 'sync_areceber' ? 'areceber' : action === 'check_blocked' ? 'blocked_check' : 'full';
       const { data: syncLog } = await supabase
         .from('integration_sync_log')
-        .insert({
-          organization_id,
-          sync_type: syncType,
-          status: 'running',
-          started_at: new Date().toISOString(),
-          records_processed: 0,
-          total_records: 0,
-        })
+        .insert({ organization_id, sync_type: syncType, status: 'running', started_at: syncStartedAt, records_processed: 0, total_records: 0 })
         .select('id')
         .single();
-
       const syncId = syncLog?.id;
 
+      // Track whether each sub-flow succeeded (for cursor update safety)
+      let clientSyncSuccess = false;
+      let boletoSyncSuccess = false;
+      let areceberSyncSuccess = false;
+      const allMetrics: SyncMetrics[] = [];
+
       try {
-        // === SYNC CLIENTS ===
+        // ==================== SYNC CLIENTS ====================
         if (action === 'sync' || action === 'cron' || action === 'sync_all' || action === 'sync_clients' || action === 'check_blocked') {
-          console.log(`[sync] Starting client sync for org ${organization_id}`);
+          const lastSyncAt = integration.last_sync_at || null;
+          const metrics = createMetrics(syncStartedAt, lastSyncAt);
           const startTime = Date.now();
 
-          // Fetch clients with progress tracking
-          const clients = await fetchAllIxcRecordsWithProgress(api_url, token, 'cliente', supabase, syncId);
-          console.log(`[sync] Fetched ${clients.length} clients in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+          console.log(`[sync] Starting client sync for org ${organization_id} | mode: ${metrics.mode}`);
+
+          // Determine if we can do incremental for 'cliente'
+          let clientExtraBody: Record<string, any> = {};
+          let useIncremental = false;
+
+          if (lastSyncAt) {
+            const cutoff = computeCutoff(lastSyncAt);
+            metrics.cutoffUsed = cutoff;
+            const testResult = await tryIncrementalRequest(api_url, token, 'cliente', cutoff);
+            if (testResult.success) {
+              useIncremental = true;
+              clientExtraBody.grid_param = buildIncrementalGridParam(cutoff);
+              console.log(`[sync] Incremental mode confirmed for 'cliente', cutoff: ${cutoff}`);
+            } else {
+              metrics.mode = 'full';
+              metrics.fallbacks.push({
+                endpoint: 'cliente', reason: testResult.error || 'Incremental filter not supported',
+                mode: 'full_scan', recordsProcessed: 0,
+              });
+              console.log(`[FALLBACK] 'cliente' incremental failed: ${testResult.error} → using full scan`);
+            }
+          }
+
+          // Stream-process clients page by page, collecting them for comparison
+          // NOTE: We still need to accumulate client data for contract cross-referencing.
+          // TODO: NEXT OPTIMIZATION - For orgs with >50k clients, consider processing
+          // in smaller windows or using DB-side matching instead of in-memory maps.
+          const clients: any[] = [];
+          const fetchStart = Date.now();
+
+          const streamResult = await processIxcStreaming(
+            api_url, token, 'cliente', supabase, syncId,
+            async (registros) => { clients.push(...registros); },
+            clientExtraBody,
+          );
+
+          metrics.pagesProcessed += streamResult.pagesProcessed;
+          metrics.totalRecordsFromIxc = streamResult.totalRecords;
+          const fetchDuration = (Date.now() - fetchStart) / 1000;
+          metrics.durations.push({ phase: 'Fetch clientes', seconds: fetchDuration });
+
+          if (useIncremental && streamResult.totalRecords > 0) {
+            // Update fallback record count if we fell back
+            const fb = metrics.fallbacks.find(f => f.endpoint === 'cliente');
+            if (fb) fb.recordsProcessed = streamResult.totalRecords;
+          }
+
+          console.log(`[sync] Fetched ${clients.length} clients (${metrics.mode}) in ${fetchDuration.toFixed(1)}s`);
 
           if (await checkCancelled(supabase, syncId)) {
             await updateSyncLog(supabase, syncId, { status: 'cancelled', completed_at: new Date().toISOString() });
@@ -555,8 +551,9 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          // Fetch filiais and contracts in parallel
+          // Fetch filiais, contracts, blocked in parallel (always full scan - small tables)
           const contractsUrl = api_url_contracts || api_url;
+          const auxStart = Date.now();
           const [filialMap, contracts, blockedData] = await Promise.all([
             fetchFiliais(api_url, token),
             fetchAllIxcRecords(contractsUrl, token, 'cliente_contrato'),
@@ -565,8 +562,7 @@ Deno.serve(async (req) => {
               return [];
             }),
           ]);
-
-          console.log(`[sync] Fetched ${contracts.length} contracts, ${blockedData.length} blocked, ${filialMap.size} filiais in ${((Date.now() - startTime) / 1000).toFixed(1)}s total`);
+          metrics.durations.push({ phase: 'Fetch aux (filiais+contracts+blocked)', seconds: (Date.now() - auxStart) / 1000 });
 
           if (await checkCancelled(supabase, syncId)) {
             await updateSyncLog(supabase, syncId, { status: 'cancelled', completed_at: new Date().toISOString() });
@@ -574,101 +570,59 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          // Build blocked set from cliente_bloqueado endpoint
+          // Build blocked set
           const blockedIds = new Set(blockedData.map((b: any) => String(b.id_cliente)));
-          console.log(`Blocked clients from cliente_bloqueado: ${blockedIds.size}`);
 
-          // Build contract map - track blocked status per client across ALL contracts
+          // Build contract map
           const contractMap = new Map<string, { active: boolean; blocked: boolean; hasAnyContract: boolean }>();
           for (const c of contracts) {
             const cid = String(c.id_cliente);
             const isContractActive = c.status === 'A';
-            // A client is blocked if they have an active contract but internet is not active
             const isContractBlocked = isContractActive && c.status_internet && c.status_internet !== 'A';
-            
             const existing = contractMap.get(cid);
             if (!existing) {
-              contractMap.set(cid, {
-                active: isContractActive,
-                blocked: isContractBlocked || blockedIds.has(cid),
-                hasAnyContract: true,
-              });
+              contractMap.set(cid, { active: isContractActive, blocked: isContractBlocked || blockedIds.has(cid), hasAnyContract: true });
             } else {
-              // Merge: if ANY contract is active, client has active contract
-              // If ANY contract is blocked, client is blocked
-              contractMap.set(cid, {
-                active: existing.active || isContractActive,
-                blocked: existing.blocked || isContractBlocked,
-                hasAnyContract: true,
-              });
+              contractMap.set(cid, { active: existing.active || isContractActive, blocked: existing.blocked || isContractBlocked, hasAnyContract: true });
             }
           }
 
-          console.log(`Contract map size: ${contractMap.size}, blocked from contracts: ${[...contractMap.values()].filter(v => v.blocked).length}, blocked from endpoint: ${blockedIds.size}`);
-
-          // Discover clients from contracts not in main list
-          const mainClientIds = new Set(clients.map((c: any) => String(c.id)));
-          const contractOnlyIds: string[] = [];
-          for (const c of contracts) {
-            const cid = String(c.id_cliente);
-            if (!mainClientIds.has(cid) && !contractOnlyIds.includes(cid)) {
-              contractOnlyIds.push(cid);
+          // Discover clients from contracts not in main list (only in full scan mode)
+          if (!useIncremental) {
+            const mainClientIds = new Set(clients.map((c: any) => String(c.id)));
+            const contractOnlyIds: string[] = [];
+            for (const c of contracts) {
+              const cid = String(c.id_cliente);
+              if (!mainClientIds.has(cid) && !contractOnlyIds.includes(cid)) contractOnlyIds.push(cid);
             }
-          }
-
-          // Fetch contract-only clients in small batches with delays
-          if (contractOnlyIds.length > 0) {
-            console.log(`[sync] Fetching ${contractOnlyIds.length} contract-only clients`);
-            for (let i = 0; i < contractOnlyIds.length; i++) {
-              if (i > 0 && i % 10 === 0) {
-                await delay(200);
-                if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
-              }
-              try {
-                const { registros } = await ixcRequest(api_url, token, 'cliente', 1, 1, {
-                  qtype: 'id',
-                  query: contractOnlyIds[i],
-                  oper: '=',
-                });
-                if (registros.length > 0) clients.push(registros[0]);
-              } catch (e) {
-                console.log(`Could not fetch client ${contractOnlyIds[i]}: ${e.message}`);
+            if (contractOnlyIds.length > 0) {
+              console.log(`[sync] Fetching ${contractOnlyIds.length} contract-only clients`);
+              for (let i = 0; i < contractOnlyIds.length; i++) {
+                if (i > 0 && i % 10 === 0) {
+                  await delay(200);
+                  if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
+                }
+                try {
+                  const { registros } = await ixcRequest(api_url, token, 'cliente', 1, 1, { qtype: 'id', query: contractOnlyIds[i], oper: '=' });
+                  if (registros.length > 0) clients.push(registros[0]);
+                } catch (e: any) { console.log(`Could not fetch client ${contractOnlyIds[i]}: ${e.message}`); }
               }
             }
           }
 
-          // Get ALL existing timelines for this org (paginated to bypass 1000-row limit)
-          const existingTimelines: any[] = [];
-          let existingFrom = 0;
-          const PAGE_SIZE = 1000;
-          while (true) {
-            const { data: page } = await supabase
-              .from('client_timelines')
-              .select('id, client_id, client_name, is_active, status, ixc_filial_id')
-              .eq('organization_id', organization_id)
-              .range(existingFrom, existingFrom + PAGE_SIZE - 1);
-            if (!page || page.length === 0) break;
-            existingTimelines.push(...page);
-            if (page.length < PAGE_SIZE) break;
-            existingFrom += PAGE_SIZE;
-          }
-          console.log(`[sync] Loaded ${existingTimelines.length} existing timelines from DB`);
-
+          // Load existing timelines from DB
+          const transformStart = Date.now();
+          const existingTimelines = await loadAllPaginated(supabase, 'client_timelines', 'id, client_id, client_name, is_active, status, ixc_filial_id', { organization_id });
           const existingMap = new Map<string, any>();
           for (const t of existingTimelines) {
             if (t.client_id) existingMap.set(t.client_id, t);
           }
 
-          // Get a user_id for this org
-          const { data: orgUsers } = await supabase
-            .from('user_roles')
-            .select('user_id')
-            .eq('organization_id', organization_id)
-            .in('role', ['owner', 'admin'])
-            .limit(1);
+          // Get default user_id
+          const { data: orgUsers } = await supabase.from('user_roles').select('user_id').eq('organization_id', organization_id).in('role', ['owner', 'admin']).limit(1);
           const defaultUserId = orgUsers?.[0]?.user_id;
           if (!defaultUserId) {
-            orgResult.errors.push('Nenhum owner/admin encontrado na organização');
+            orgResult.errors.push('Nenhum owner/admin encontrado');
             await updateSyncLog(supabase, syncId, { status: 'error', error_message: 'No admin found', completed_at: new Date().toISOString() });
             results.push(orgResult);
             continue;
@@ -683,26 +637,17 @@ Deno.serve(async (req) => {
           const updateFilialIds: string[] = [];
           const updateFilialNames: string[] = [];
 
-          let blockedCount = 0;
-          let blockedFromEndpointCount = 0;
-          let blockedFromContractCount = 0;
-          let blockedFromClientFieldCount = 0;
-          let archivedCount = 0;
-          let activeCount = 0;
-
           for (const client of clients) {
             const clientIdStr = String(client.id);
             const clientName = client.razao || client.fantasia || `Cliente ${client.id}`;
             const contract = contractMap.get(clientIdStr);
             const isClientActive = client.ativo === 'S';
-
             const filialId = client.id_filial ? String(client.id_filial) : null;
             const filialName = filialId ? (filialMap.get(filialId) || `Filial ${filialId}`) : null;
 
             let isActive = true;
             let status = 'active';
 
-            // PRIORITY 1: Blocked (from any source) - ABSOLUTE PRIORITY
             const isBlockedFromEndpoint = blockedIds.has(clientIdStr);
             const isBlockedFromContract = contract?.blocked ?? false;
             const isBlockedFromClient = client.bloqueado === 'S';
@@ -711,25 +656,15 @@ Deno.serve(async (req) => {
             if (isBlocked) {
               isActive = false;
               status = 'active';
-              blockedCount++;
-              if (isBlockedFromEndpoint) blockedFromEndpointCount++;
-              if (isBlockedFromContract) blockedFromContractCount++;
-              if (isBlockedFromClient) blockedFromClientFieldCount++;
             } else if (!isClientActive) {
-              // PRIORITY 2: Client inactive in IXC (ativo != 'S')
               isActive = false;
               status = 'archived';
-              archivedCount++;
             } else if (contract && !contract.active) {
-              // PRIORITY 3: Client active but all contracts inactive
               isActive = false;
               status = 'archived';
-              archivedCount++;
             } else {
-              // PRIORITY 4: Active client
               isActive = true;
               status = 'active';
-              activeCount++;
             }
 
             const existing = existingMap.get(clientIdStr);
@@ -741,191 +676,257 @@ Deno.serve(async (req) => {
                 updateStatuses.push(status);
                 updateFilialIds.push(filialId || '');
                 updateFilialNames.push(filialName || '');
+              } else {
+                metrics.ignored++;
               }
             } else {
               toInsert.push({
-                client_id: clientIdStr,
-                client_name: clientName,
-                is_active: isActive,
-                status,
-                organization_id,
-                user_id: defaultUserId,
-                start_date: new Date().toISOString().split('T')[0],
-                ixc_filial_id: filialId,
-                ixc_filial_name: filialName,
+                client_id: clientIdStr, client_name: clientName, is_active: isActive, status,
+                organization_id, user_id: defaultUserId, start_date: new Date().toISOString().split('T')[0],
+                ixc_filial_id: filialId, ixc_filial_name: filialName,
               });
             }
           }
 
-          console.log(`[sync] Classification: ${activeCount} active, ${blockedCount} blocked (endpoint: ${blockedFromEndpointCount}, contract: ${blockedFromContractCount}, client_field: ${blockedFromClientFieldCount}), ${archivedCount} archived`);
-          console.log(`[sync] DB changes: ${toInsert.length} to insert, ${updateIds.length} to update`);
+          metrics.durations.push({ phase: 'Transform clientes', seconds: (Date.now() - transformStart) / 1000 });
 
-          // Batch insert
+          // DB writes
+          const dbStart = Date.now();
+
           if (toInsert.length > 0) {
-            for (let i = 0; i < toInsert.length; i += 200) {
+            for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
               if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
-              const chunk = toInsert.slice(i, i + 200);
+              const chunk = toInsert.slice(i, i + BATCH_SIZE);
               const { error } = await supabase.from('client_timelines').insert(chunk);
               if (error) orgResult.errors.push(`Insert error: ${error.message}`);
             }
           }
 
-          // Batch update
           if (updateIds.length > 0) {
-            for (let i = 0; i < updateIds.length; i += 500) {
+            for (let i = 0; i < updateIds.length; i += BATCH_SIZE) {
               if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
               const { error } = await supabase.rpc('batch_upsert_clients', {
-                p_ids: updateIds.slice(i, i + 500),
-                p_names: updateNames.slice(i, i + 500),
-                p_active: updateActive.slice(i, i + 500),
-                p_statuses: updateStatuses.slice(i, i + 500),
-                p_filial_ids: updateFilialIds.slice(i, i + 500),
-                p_filial_names: updateFilialNames.slice(i, i + 500),
+                p_ids: updateIds.slice(i, i + BATCH_SIZE),
+                p_names: updateNames.slice(i, i + BATCH_SIZE),
+                p_active: updateActive.slice(i, i + BATCH_SIZE),
+                p_statuses: updateStatuses.slice(i, i + BATCH_SIZE),
+                p_filial_ids: updateFilialIds.slice(i, i + BATCH_SIZE),
+                p_filial_names: updateFilialNames.slice(i, i + BATCH_SIZE),
               });
               if (error) orgResult.errors.push(`Update error: ${error.message}`);
             }
           }
 
+          metrics.durations.push({ phase: 'DB write clientes', seconds: (Date.now() - dbStart) / 1000 });
+          metrics.inserts = toInsert.length;
+          metrics.updates = updateIds.length;
+          metrics.totalDurationSeconds = (Date.now() - startTime) / 1000;
+
           orgResult.clients = clients.length;
           orgResult.clients_inserted = toInsert.length;
           orgResult.clients_updated = updateIds.length;
-          orgResult.clients_from_contracts = contractOnlyIds.length;
-          orgResult.filiais = filialMap.size;
-          console.log(`[sync] Client sync done in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+
+          logSyncSummary('CLIENTS', metrics);
+          allMetrics.push(metrics);
+
+          // Mark client sync as successful (no errors thrown)
+          clientSyncSuccess = true;
         }
 
-        // === SYNC BOLETOS ===
+        // ==================== SYNC BOLETOS ====================
         if (action === 'sync_boletos' || action === 'sync' || action === 'cron' || action === 'sync_all') {
           if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
 
-          console.log(`[sync] Starting boleto sync`);
+          const lastBoletoSyncAt = integration.last_boleto_sync_at || null;
+          const metrics = createMetrics(syncStartedAt, lastBoletoSyncAt);
           const boletoStart = Date.now();
 
-          const currentOffset = orgResult.clients || 0;
-          const boletos = await fetchAllIxcRecordsWithProgress(api_url, token, 'fn_areceber', supabase, syncId, {}, currentOffset);
-          console.log(`[sync] Fetched ${boletos.length} boletos in ${((Date.now() - boletoStart) / 1000).toFixed(1)}s`);
+          console.log(`[sync] Starting boleto sync | mode: ${metrics.mode}`);
 
-          // Get ALL timelines with pagination to bypass 1000-row limit
-          const allTimelines: any[] = [];
-          let timelineFrom = 0;
-          const TIMELINE_PAGE = 1000;
-          while (true) {
-            const { data: page } = await supabase
-              .from('client_timelines')
-              .select('id, client_id')
-              .eq('organization_id', organization_id)
-              .range(timelineFrom, timelineFrom + TIMELINE_PAGE - 1);
-            if (!page || page.length === 0) break;
-            allTimelines.push(...page);
-            if (page.length < TIMELINE_PAGE) break;
-            timelineFrom += TIMELINE_PAGE;
+          // Test incremental for fn_areceber
+          let boletoExtraBody: Record<string, any> = {};
+          let useIncremental = false;
+
+          if (lastBoletoSyncAt) {
+            const cutoff = computeCutoff(lastBoletoSyncAt);
+            metrics.cutoffUsed = cutoff;
+            const testResult = await tryIncrementalRequest(api_url, token, 'fn_areceber', cutoff);
+            if (testResult.success) {
+              useIncremental = true;
+              boletoExtraBody.grid_param = buildIncrementalGridParam(cutoff);
+              console.log(`[sync] Incremental mode confirmed for 'fn_areceber', cutoff: ${cutoff}`);
+            } else {
+              metrics.mode = 'full';
+              metrics.fallbacks.push({
+                endpoint: 'fn_areceber', reason: testResult.error || 'Incremental not supported',
+                mode: 'full_scan', recordsProcessed: 0,
+              });
+              console.log(`[FALLBACK] 'fn_areceber' incremental failed: ${testResult.error} → using full scan`);
+            }
           }
-          console.log(`[sync_boletos] Loaded ${allTimelines.length} timelines for boleto mapping`);
 
+          // Load timelines for mapping
+          const allTimelines = await loadAllPaginated(supabase, 'client_timelines', 'id, client_id', { organization_id });
           const clientToTimeline = new Map<string, string>();
           for (const t of allTimelines) {
             if (t.client_id) clientToTimeline.set(t.client_id, t.id);
           }
 
-          const timelineIds = allTimelines.map(t => t.id);
+          // For incremental mode with few expected changes, load only needed existing boletos
+          // For full scan, load all existing boletos
+          // TODO: NEXT OPTIMIZATION - For orgs with >50k boletos in full scan mode,
+          // consider chunked DB queries matching each IXC page's client IDs instead of loading all.
           let existingBoletos = new Map<string, any>();
-          if (timelineIds.length > 0) {
-            for (let i = 0; i < timelineIds.length; i += 200) {
-              const chunk = timelineIds.slice(i, i + 200);
-              // Paginate within each chunk to avoid 1000-row limit
-              let boletoFrom = 0;
-              const BOLETO_PAGE = 1000;
-              while (true) {
-                const { data } = await supabase
-                  .from('client_boletos')
-                  .select('id, ixc_boleto_id, timeline_id, status, boleto_value, due_date')
-                  .in('timeline_id', chunk)
-                  .not('ixc_boleto_id', 'is', null)
-                  .range(boletoFrom, boletoFrom + BOLETO_PAGE - 1);
-                if (!data || data.length === 0) break;
+
+          const progressOffset = orgResult.clients || 0;
+          const boletosToUpsert: any[] = [];
+          const boletosToUpdateViaRpc: { id: string; status: string; boleto_value: number; due_date: string; boleto_value_open: number }[] = [];
+
+          if (!useIncremental) {
+            // Full scan: load all existing boletos
+            const timelineIds = allTimelines.map(t => t.id);
+            if (timelineIds.length > 0) {
+              for (let i = 0; i < timelineIds.length; i += 200) {
+                const chunk = timelineIds.slice(i, i + 200);
+                let boletoFrom = 0;
+                const BOLETO_PAGE = 1000;
+                while (true) {
+                  const { data } = await supabase
+                    .from('client_boletos')
+                    .select('id, ixc_boleto_id, timeline_id, status, boleto_value, due_date')
+                    .in('timeline_id', chunk)
+                    .not('ixc_boleto_id', 'is', null)
+                    .range(boletoFrom, boletoFrom + BOLETO_PAGE - 1);
+                  if (!data || data.length === 0) break;
+                  for (const b of data) {
+                    if (b.ixc_boleto_id) existingBoletos.set(b.ixc_boleto_id, b);
+                  }
+                  if (data.length < BOLETO_PAGE) break;
+                  boletoFrom += BOLETO_PAGE;
+                }
+              }
+            }
+            console.log(`[sync_boletos] Loaded ${existingBoletos.size} existing boletos from DB (full scan mode)`);
+          }
+
+          // Stream-process boletos
+          const fetchStart = Date.now();
+          // Collect IXC boleto IDs for incremental existingMap lookup
+          const incrementalIxcIds: string[] = [];
+
+          const streamResult = await processIxcStreaming(
+            api_url, token, 'fn_areceber', supabase, syncId,
+            async (registros) => {
+              // For incremental mode, collect IXC IDs first
+              if (useIncremental) {
+                for (const boleto of registros) {
+                  incrementalIxcIds.push(String(boleto.id));
+                }
+              }
+
+              for (const boleto of registros) {
+                const clientId = String(boleto.id_cliente);
+                const timelineId = clientToTimeline.get(clientId);
+                if (!timelineId) continue;
+
+                const ixcBoletoId = String(boleto.id);
+                const valor = parseFloat(boleto.valor || '0');
+                const valorAberto = parseFloat(boleto.valor_aberto || '0');
+                const dataVencimento = boleto.data_vencimento || '';
+
+                let status = 'pendente';
+                if (boleto.status === 'R' || boleto.liquidado === 'S') status = 'pago';
+                else if (boleto.status === 'C') status = 'cancelado';
+
+                const existing = existingBoletos.get(ixcBoletoId);
+                if (existing) {
+                  if (existing.status !== status || Number(existing.boleto_value) !== valor || existing.due_date !== dataVencimento) {
+                    boletosToUpdateViaRpc.push({ id: existing.id, status, boleto_value: valor, due_date: dataVencimento, boleto_value_open: valorAberto });
+                  } else {
+                    metrics.ignored++;
+                  }
+                } else {
+                  boletosToUpsert.push({
+                    timeline_id: timelineId, ixc_boleto_id: ixcBoletoId,
+                    boleto_value: valor, boleto_value_open: valorAberto, due_date: dataVencimento, status,
+                  });
+                }
+              }
+            },
+            boletoExtraBody,
+            progressOffset,
+          );
+
+          // For incremental: load existing boletos only for the IDs we got from IXC
+          if (useIncremental && incrementalIxcIds.length > 0) {
+            console.log(`[sync_boletos] Incremental: loading existing boletos for ${incrementalIxcIds.length} IXC IDs`);
+            for (let i = 0; i < incrementalIxcIds.length; i += 500) {
+              const chunk = incrementalIxcIds.slice(i, i + 500);
+              const { data } = await supabase
+                .from('client_boletos')
+                .select('id, ixc_boleto_id, timeline_id, status, boleto_value, due_date')
+                .in('ixc_boleto_id', chunk);
+              if (data) {
                 for (const b of data) {
                   if (b.ixc_boleto_id) existingBoletos.set(b.ixc_boleto_id, b);
                 }
-                if (data.length < BOLETO_PAGE) break;
-                boletoFrom += BOLETO_PAGE;
               }
             }
-          }
-          console.log(`[sync_boletos] Loaded ${existingBoletos.size} existing boletos from DB`);
+            console.log(`[sync_boletos] Loaded ${existingBoletos.size} existing boletos for comparison`);
 
-          const boletosToInsert: any[] = [];
-          const boletosToUpdate: { id: string; status: string; boleto_value: number; due_date: string; boleto_value_open: number }[] = [];
+            // Re-process: now that we have existing data, re-classify upserts vs updates
+            const reprocessed: any[] = [...boletosToUpsert];
+            boletosToUpsert.length = 0;
+            metrics.ignored = 0;
 
-          for (const boleto of boletos) {
-            const clientId = String(boleto.id_cliente);
-            const timelineId = clientToTimeline.get(clientId);
-            if (!timelineId) continue;
-
-            const ixcBoletoId = String(boleto.id);
-            const valor = parseFloat(boleto.valor || '0');
-            const valorAberto = parseFloat(boleto.valor_aberto || '0');
-            const dataVencimento = boleto.data_vencimento || '';
-
-            let status = 'pendente';
-            if (boleto.status === 'R' || boleto.liquidado === 'S') {
-              status = 'pago';
-            } else if (boleto.status === 'C') {
-              status = 'cancelado';
-            }
-
-            const existing = existingBoletos.get(ixcBoletoId);
-            if (existing) {
-              if (existing.status !== status || Number(existing.boleto_value) !== valor || existing.due_date !== dataVencimento) {
-                boletosToUpdate.push({ id: existing.id, status, boleto_value: valor, due_date: dataVencimento, boleto_value_open: valorAberto });
-              }
-            } else {
-              boletosToInsert.push({
-                timeline_id: timelineId,
-                ixc_boleto_id: ixcBoletoId,
-                boleto_value: valor,
-                boleto_value_open: valorAberto,
-                due_date: dataVencimento,
-                status,
-              });
-            }
-          }
-
-          let totalInserted = 0;
-          let totalFailed = 0;
-          if (boletosToInsert.length > 0) {
-            for (let i = 0; i < boletosToInsert.length; i += 200) {
-              if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
-              const chunk = boletosToInsert.slice(i, i + 200);
-              const chunkIndex = Math.floor(i / 200);
-              const { error } = await supabase.from('client_boletos').insert(chunk);
-              if (error) {
-                console.error(`[sync_boletos] Chunk ${chunkIndex} failed (${chunk.length} records): ${error.message}`);
-                // Fallback: insert individually
-                let chunkSaved = 0;
-                let chunkFailed = 0;
-                for (const boleto of chunk) {
-                  const { error: singleError } = await supabase.from('client_boletos').insert([boleto]);
-                  if (singleError) {
-                    chunkFailed++;
-                    console.error(`[sync_boletos] Individual insert failed - ixc_id: ${boleto.ixc_boleto_id}, client_timeline: ${boleto.timeline_id}, due: ${boleto.due_date}, value: ${boleto.boleto_value}, error: ${singleError.message}`);
-                  } else {
-                    chunkSaved++;
-                  }
+            for (const boleto of reprocessed) {
+              const existing = existingBoletos.get(boleto.ixc_boleto_id);
+              if (existing) {
+                if (existing.status !== boleto.status || Number(existing.boleto_value) !== boleto.boleto_value || existing.due_date !== boleto.due_date) {
+                  boletosToUpdateViaRpc.push({ id: existing.id, status: boleto.status, boleto_value: boleto.boleto_value, due_date: boleto.due_date, boleto_value_open: boleto.boleto_value_open });
+                } else {
+                  metrics.ignored++;
                 }
-                console.log(`[sync_boletos] Chunk ${chunkIndex} fallback: ${chunkSaved} saved, ${chunkFailed} failed`);
-                totalInserted += chunkSaved;
-                totalFailed += chunkFailed;
+              } else {
+                boletosToUpsert.push(boleto);
+              }
+            }
+          }
+
+          metrics.pagesProcessed += streamResult.pagesProcessed;
+          metrics.totalRecordsFromIxc = streamResult.totalRecords;
+          metrics.durations.push({ phase: 'Fetch+classify boletos', seconds: (Date.now() - fetchStart) / 1000 });
+
+          // Update fallback record count
+          const fb = metrics.fallbacks.find(f => f.endpoint === 'fn_areceber');
+          if (fb) fb.recordsProcessed = streamResult.totalRecords;
+
+          // DB writes - use native upsert for new boletos
+          const dbStart = Date.now();
+          let totalInserted = 0;
+
+          if (boletosToUpsert.length > 0) {
+            for (let i = 0; i < boletosToUpsert.length; i += BATCH_SIZE) {
+              if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
+              const chunk = boletosToUpsert.slice(i, i + BATCH_SIZE);
+              const { error } = await supabase.from('client_boletos').upsert(chunk, {
+                onConflict: 'ixc_boleto_id',
+                ignoreDuplicates: false,
+              });
+              if (error) {
+                orgResult.errors.push(`Boleto upsert error: ${error.message}`);
+                console.error(`[sync_boletos] Upsert failed: ${error.message}`);
               } else {
                 totalInserted += chunk.length;
               }
             }
           }
-          console.log(`[sync_boletos] Insert summary: ${totalInserted} saved, ${totalFailed} failed out of ${boletosToInsert.length} total`);
 
-          if (boletosToUpdate.length > 0) {
-            for (let i = 0; i < boletosToUpdate.length; i += 500) {
+          // Update existing boletos via RPC (batch update)
+          if (boletosToUpdateViaRpc.length > 0) {
+            for (let i = 0; i < boletosToUpdateViaRpc.length; i += BATCH_SIZE) {
               if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
-              const chunk = boletosToUpdate.slice(i, i + 500);
+              const chunk = boletosToUpdateViaRpc.slice(i, i + BATCH_SIZE);
               const { error } = await supabase.rpc('batch_upsert_boletos', {
                 p_ids: chunk.map(b => b.id),
                 p_values: chunk.map(b => b.boleto_value),
@@ -937,194 +938,245 @@ Deno.serve(async (req) => {
             }
           }
 
-          orgResult.boletos = boletos.length;
+          metrics.durations.push({ phase: 'DB write boletos', seconds: (Date.now() - dbStart) / 1000 });
+          metrics.inserts = totalInserted;
+          metrics.updates = boletosToUpdateViaRpc.length;
+          metrics.totalDurationSeconds = (Date.now() - boletoStart) / 1000;
+
+          orgResult.boletos = streamResult.totalRecords;
           orgResult.boletos_inserted = totalInserted;
-          orgResult.boletos_failed = totalFailed;
-          orgResult.boletos_updated = boletosToUpdate.length;
-          orgResult.existing_boletos_detected = existingBoletos.size;
-          console.log(`[sync] Boleto sync done in ${((Date.now() - boletoStart) / 1000).toFixed(1)}s`);
+          orgResult.boletos_updated = boletosToUpdateViaRpc.length;
+
+          logSyncSummary('BOLETOS', metrics);
+          allMetrics.push(metrics);
+
+          boletoSyncSuccess = true;
         }
 
-        // === SYNC CONTAS A RECEBER ===
+        // ==================== SYNC CONTAS A RECEBER ====================
         if (action === 'sync_areceber') {
           if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
 
-          console.log(`[sync] Starting contas a receber sync`);
+          const lastBoletoSyncAt = integration.last_boleto_sync_at || null;
+          const metrics = createMetrics(syncStartedAt, lastBoletoSyncAt);
           const aReceberStart = Date.now();
 
-          // Fetch all pending receivables (status != R and != C)
-          const aReceber = await fetchAllIxcRecordsWithProgress(api_url, token, 'fn_areceber', supabase, syncId, {
-            qtype: 'fn_areceber.id',
-            query: '0',
-            oper: '>',
+          console.log(`[sync] Starting contas a receber sync | mode: ${metrics.mode}`);
+
+          // Build extra body for pending receivables
+          let aReceberExtra: Record<string, any> = {
+            qtype: 'fn_areceber.id', query: '0', oper: '>',
             grid_param: JSON.stringify([
               { TB: 'fn_areceber.status', OP: '!=', P: 'R' },
               { TB: 'fn_areceber.status', OP: '!=', P: 'C' },
             ]),
-          });
-          console.log(`[sync] Fetched ${aReceber.length} pending receivables in ${((Date.now() - aReceberStart) / 1000).toFixed(1)}s`);
+          };
 
-          if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
-
-          // Get ALL existing timelines with pagination
-          const allTimelinesAR: any[] = [];
-          let arFrom = 0;
-          const AR_PAGE = 1000;
-          while (true) {
-            const { data: page } = await supabase
-              .from('client_timelines')
-              .select('id, client_id')
-              .eq('organization_id', organization_id)
-              .range(arFrom, arFrom + AR_PAGE - 1);
-            if (!page || page.length === 0) break;
-            allTimelinesAR.push(...page);
-            if (page.length < AR_PAGE) break;
-            arFrom += AR_PAGE;
+          // Try incremental
+          if (lastBoletoSyncAt) {
+            const cutoff = computeCutoff(lastBoletoSyncAt);
+            metrics.cutoffUsed = cutoff;
+            const baseFilters = [
+              { TB: 'fn_areceber.status', OP: '!=', P: 'R' },
+              { TB: 'fn_areceber.status', OP: '!=', P: 'C' },
+              { TB: 'data_alteracao', OP: '>=', P: cutoff },
+            ];
+            const testExtra = { ...aReceberExtra, grid_param: JSON.stringify(baseFilters) };
+            const testResult = await tryIncrementalRequest(api_url, token, 'fn_areceber', cutoff, {
+              qtype: 'fn_areceber.id', query: '0', oper: '>',
+              grid_param: JSON.stringify([
+                { TB: 'fn_areceber.status', OP: '!=', P: 'R' },
+                { TB: 'fn_areceber.status', OP: '!=', P: 'C' },
+              ]),
+            });
+            if (testResult.success) {
+              aReceberExtra = testExtra;
+              console.log(`[sync] Incremental mode confirmed for 'fn_areceber' (areceber), cutoff: ${cutoff}`);
+            } else {
+              metrics.mode = 'full';
+              metrics.fallbacks.push({
+                endpoint: 'fn_areceber (areceber)', reason: testResult.error || 'Incremental not supported',
+                mode: 'full_scan', recordsProcessed: 0,
+              });
+              console.log(`[FALLBACK] 'fn_areceber' (areceber) incremental failed → full scan`);
+            }
           }
-          console.log(`[sync_areceber] Loaded ${allTimelinesAR.length} timelines for receivables mapping`);
 
+          // Load timelines
+          const allTimelinesAR = await loadAllPaginated(supabase, 'client_timelines', 'id, client_id', { organization_id });
           const clientToTimeline = new Map<string, string>();
           const knownClientIds = new Set<string>();
           for (const t of allTimelinesAR) {
-            if (t.client_id) {
-              clientToTimeline.set(t.client_id, t.id);
-              knownClientIds.add(t.client_id);
-            }
+            if (t.client_id) { clientToTimeline.set(t.client_id, t.id); knownClientIds.add(t.client_id); }
           }
 
-          // Aggregate debt per client from pending receivables
+          // Stream process pending receivables
           const debtPerClient = new Map<string, number>();
           const newClientIds = new Set<string>();
 
-          for (const item of aReceber) {
-            const clientId = String(item.id_cliente);
-            // Usar valor_aberto (saldo em aberto real) ao invés de valor (valor total do boleto)
-            const valorAberto = parseFloat(item.valor_aberto || item.valor || '0');
-            debtPerClient.set(clientId, (debtPerClient.get(clientId) || 0) + valorAberto);
+          const streamResult = await processIxcStreaming(
+            api_url, token, 'fn_areceber', supabase, syncId,
+            async (registros) => {
+              for (const item of registros) {
+                const clientId = String(item.id_cliente);
+                const valorAberto = parseFloat(item.valor_aberto || item.valor || '0');
+                debtPerClient.set(clientId, (debtPerClient.get(clientId) || 0) + valorAberto);
+                if (!knownClientIds.has(clientId)) newClientIds.add(clientId);
+              }
+            },
+            aReceberExtra,
+          );
 
-            if (!knownClientIds.has(clientId)) {
-              newClientIds.add(clientId);
-            }
-          }
+          metrics.pagesProcessed = streamResult.pagesProcessed;
+          metrics.totalRecordsFromIxc = streamResult.totalRecords;
+          metrics.durations.push({ phase: 'Fetch+process areceber', seconds: (Date.now() - aReceberStart) / 1000 });
 
-          console.log(`[sync] ${debtPerClient.size} clients with pending debt, ${newClientIds.size} new clients to discover`);
+          // Update fallback record count
+          const fb = metrics.fallbacks.find(f => f.endpoint === 'fn_areceber (areceber)');
+          if (fb) fb.recordsProcessed = streamResult.totalRecords;
 
           // Discover new clients
           let newClientsInserted = 0;
           if (newClientIds.size > 0) {
-            // Get a user_id for this org
-            const { data: orgUsers } = await supabase
-              .from('user_roles')
-              .select('user_id')
-              .eq('organization_id', organization_id)
-              .in('role', ['owner', 'admin'])
-              .limit(1);
+            const { data: orgUsers } = await supabase.from('user_roles').select('user_id').eq('organization_id', organization_id).in('role', ['owner', 'admin']).limit(1);
             const defaultUserId = orgUsers?.[0]?.user_id;
-
             if (defaultUserId) {
               const toInsert: any[] = [];
-              const newClientIdArray = [...newClientIds];
-
-              for (let i = 0; i < newClientIdArray.length; i++) {
+              const newArr = [...newClientIds];
+              for (let i = 0; i < newArr.length; i++) {
                 if (i > 0 && i % 10 === 0) {
                   await delay(200);
                   if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
                 }
                 try {
-                  const { registros } = await ixcRequest(api_url, token, 'cliente', 1, 1, {
-                    qtype: 'id',
-                    query: newClientIdArray[i],
-                    oper: '=',
-                  });
+                  const { registros } = await ixcRequest(api_url, token, 'cliente', 1, 1, { qtype: 'id', query: newArr[i], oper: '=' });
                   if (registros.length > 0) {
                     const client = registros[0];
-                    const clientName = client.razao || client.fantasia || `Cliente ${client.id}`;
-                    const filialId = client.id_filial ? String(client.id_filial) : null;
-
                     toInsert.push({
-                      client_id: newClientIdArray[i],
-                      client_name: clientName,
-                      is_active: true,
-                      status: 'active',
-                      organization_id,
-                      user_id: defaultUserId,
+                      client_id: newArr[i], client_name: client.razao || client.fantasia || `Cliente ${client.id}`,
+                      is_active: true, status: 'active', organization_id, user_id: defaultUserId,
                       start_date: new Date().toISOString().split('T')[0],
-                      ixc_filial_id: filialId,
-                      boleto_value: debtPerClient.get(newClientIdArray[i]) || null,
+                      ixc_filial_id: client.id_filial ? String(client.id_filial) : null,
+                      boleto_value: debtPerClient.get(newArr[i]) || null,
                     });
-                    // Also map for debt update
-                    clientToTimeline.set(newClientIdArray[i], ''); // placeholder
+                    clientToTimeline.set(newArr[i], '');
                   }
-                } catch (e) {
-                  console.log(`Could not fetch client ${newClientIdArray[i]}: ${e.message}`);
-                }
+                } catch (e: any) { console.log(`Could not fetch client ${newArr[i]}: ${e.message}`); }
               }
-
               if (toInsert.length > 0) {
-                for (let i = 0; i < toInsert.length; i += 200) {
+                for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
                   if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
-                  const chunk = toInsert.slice(i, i + 200);
+                  const chunk = toInsert.slice(i, i + BATCH_SIZE);
                   const { error } = await supabase.from('client_timelines').insert(chunk);
                   if (error) orgResult.errors.push(`Insert error: ${error.message}`);
                   else newClientsInserted += chunk.length;
                 }
               }
+              metrics.inserts += newClientsInserted;
             }
           }
 
-          // Update boleto_value (total pending debt) for existing clients
+          // Update boleto_value (total debt) for existing clients
           let updatedDebtCount = 0;
           const debtUpdates: { id: string; value: number }[] = [];
           for (const [clientId, totalDebt] of debtPerClient) {
             const timelineId = clientToTimeline.get(clientId);
-            if (timelineId && timelineId !== '') {
-              debtUpdates.push({ id: timelineId, value: totalDebt });
-            }
+            if (timelineId && timelineId !== '') debtUpdates.push({ id: timelineId, value: totalDebt });
           }
 
-          // Batch update boleto_value
           for (let i = 0; i < debtUpdates.length; i += 50) {
             if (await checkCancelled(supabase, syncId)) throw new Error('CANCELLED');
             const chunk = debtUpdates.slice(i, i + 50);
             for (const upd of chunk) {
-              const { error } = await supabase
-                .from('client_timelines')
-                .update({ boleto_value: upd.value })
-                .eq('id', upd.id);
+              const { error } = await supabase.from('client_timelines').update({ boleto_value: upd.value }).eq('id', upd.id);
               if (!error) updatedDebtCount++;
             }
           }
 
-          orgResult.areceber_total = aReceber.length;
+          metrics.updates += updatedDebtCount;
+          metrics.totalDurationSeconds = (Date.now() - aReceberStart) / 1000;
+
+          orgResult.areceber_total = streamResult.totalRecords;
           orgResult.clients_discovered = newClientsInserted;
           orgResult.debt_updated = updatedDebtCount;
-          console.log(`[sync] Contas a receber done in ${((Date.now() - aReceberStart) / 1000).toFixed(1)}s: ${newClientsInserted} new clients, ${updatedDebtCount} debts updated`);
+
+          logSyncSummary('CONTAS A RECEBER', metrics);
+          allMetrics.push(metrics);
+
+          areceberSyncSuccess = true;
         }
 
+        // ==================== FINALIZE: Update sync log + cursors ====================
         if (syncId) {
+          const totalInserts = (orgResult.clients_inserted || 0) + (orgResult.boletos_inserted || 0) + (orgResult.clients_discovered || 0);
+          const totalUpdates = (orgResult.clients_updated || 0) + (orgResult.boletos_updated || 0) + (orgResult.debt_updated || 0);
+
+          // Build sync_metadata summary
+          const syncMetadata: any = {
+            metrics: allMetrics.map(m => ({
+              mode: m.mode,
+              previousLastSyncAt: m.previousLastSyncAt,
+              syncStartedAt: m.syncStartedAt,
+              cutoffUsed: m.cutoffUsed,
+              pagesProcessed: m.pagesProcessed,
+              totalRecordsFromIxc: m.totalRecordsFromIxc,
+              inserts: m.inserts,
+              updates: m.updates,
+              ignored: m.ignored,
+              fallbacks: m.fallbacks,
+              totalDurationSeconds: m.totalDurationSeconds,
+            })),
+          };
+
           await updateSyncLog(supabase, syncId, {
             status: 'completed',
             completed_at: new Date().toISOString(),
-            records_created: (orgResult.clients_inserted || 0) + (orgResult.boletos_inserted || 0) + (orgResult.clients_discovered || 0),
-            records_updated: (orgResult.clients_updated || 0) + (orgResult.boletos_updated || 0) + (orgResult.debt_updated || 0),
+            records_created: totalInserts,
+            records_updated: totalUpdates,
+            sync_metadata: syncMetadata,
           });
+
+          // Update last_sync_at cursors ONLY on complete success
+          if (clientSyncSuccess && (action === 'sync' || action === 'cron' || action === 'sync_all' || action === 'sync_clients')) {
+            await supabase.from('organization_integrations').update({ last_sync_at: syncStartedAt }).eq('id', integration.id);
+            console.log(`[sync] ✅ Updated last_sync_at = ${syncStartedAt}`);
+          }
+
+          if ((boletoSyncSuccess || areceberSyncSuccess) && (action === 'sync_boletos' || action === 'sync' || action === 'cron' || action === 'sync_all' || action === 'sync_areceber')) {
+            await supabase.from('organization_integrations').update({ last_boleto_sync_at: syncStartedAt }).eq('id', integration.id);
+            console.log(`[sync] ✅ Updated last_boleto_sync_at = ${syncStartedAt}`);
+          }
         }
+
       } catch (e: any) {
         if (e.message === 'CANCELLED') {
           orgResult.errors.push('Sincronização cancelada pelo usuário');
           if (syncId) {
             await updateSyncLog(supabase, syncId, { status: 'cancelled', completed_at: new Date().toISOString() });
           }
+          // Do NOT update last_sync_at on cancellation
         } else {
           orgResult.errors.push(e.message);
           console.error(`[sync] Error: ${e.message}`);
           if (syncId) {
-            await updateSyncLog(supabase, syncId, {
+            // Include fallback info in error message for auditability
+            const fallbackInfo = allMetrics.flatMap(m => m.fallbacks);
+            const errorPayload: any = {
               status: 'error',
               error_message: e.message,
               completed_at: new Date().toISOString(),
-            });
+            };
+            if (fallbackInfo.length > 0 || allMetrics.length > 0) {
+              errorPayload.sync_metadata = {
+                metrics: allMetrics.map(m => ({
+                  mode: m.mode, fallbacks: m.fallbacks,
+                  pagesProcessed: m.pagesProcessed, inserts: m.inserts, updates: m.updates,
+                })),
+              };
+            }
+            await updateSyncLog(supabase, syncId, errorPayload);
           }
+          // Do NOT update last_sync_at on error
         }
       }
 
