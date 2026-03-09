@@ -351,8 +351,8 @@ const Clients = () => {
     <AppLayout>
       <div className="p-6">
           <div className="max-w-[1600px] mx-auto flex gap-6">
-            {/* Left Column - Client List */}
-            <div className="flex-1 min-w-0">
+            {/* Left Column - Client List (35%) */}
+            <div className="w-[35%] min-w-0 flex-shrink-0">
               <div className="animate-fade-in">
                 <div className="flex items-center gap-4 mb-6">
                   <h2 className="text-2xl font-bold text-foreground">Clientes</h2>
