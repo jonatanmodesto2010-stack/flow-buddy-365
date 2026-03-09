@@ -736,6 +736,7 @@ export type Database = {
           id: string
           integration_type: string
           is_active: boolean
+          ixc_os_retirada_assunto_id: string | null
           organization_id: string
           updated_at: string | null
         }
@@ -747,6 +748,7 @@ export type Database = {
           id?: string
           integration_type?: string
           is_active?: boolean
+          ixc_os_retirada_assunto_id?: string | null
           organization_id: string
           updated_at?: string | null
         }
@@ -758,6 +760,7 @@ export type Database = {
           id?: string
           integration_type?: string
           is_active?: boolean
+          ixc_os_retirada_assunto_id?: string | null
           organization_id?: string
           updated_at?: string | null
         }

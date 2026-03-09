@@ -1,0 +1,1 @@
+ALTER TABLE public.organization_integrations ADD COLUMN ixc_os_retirada_assunto_id text;
