@@ -451,10 +451,8 @@ const Clients = () => {
                     </Select>
                     <button
                     onClick={() => navigate('/history')}
-                    className="px-6 py-2 bg-primary/10 text-primary rounded-lg font-semibold hover:bg-primary/20 transition-all flex items-center gap-2 whitespace-nowrap">
-                    
+                    className="p-2 bg-primary/10 text-primary rounded-lg font-semibold hover:bg-primary/20 transition-all flex items-center justify-center whitespace-nowrap">
                       <History size={18} />
-                      Histórico
                     </button>
 
                     <button
