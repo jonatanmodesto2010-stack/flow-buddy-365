@@ -20,6 +20,7 @@ interface BoletoData {
   due_date: string;
   status: string;
   boleto_value: number;
+  boleto_value_open: number | null;
 }
 
 const Dashboard = () => {
