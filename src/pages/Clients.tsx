@@ -426,10 +426,8 @@ const Clients = () => {
 
                     <button
                     onClick={() => setNewClientModalOpen(true)}
-                    className="px-6 py-2 bg-gradient-primary text-primary-foreground rounded-lg font-semibold hover:bg-gradient-hover transition-all flex items-center gap-2 whitespace-nowrap">
-                    
+                    className="p-2 bg-gradient-primary text-primary-foreground rounded-lg font-semibold hover:bg-gradient-hover transition-all flex items-center justify-center whitespace-nowrap">
                       <Plus size={18} />
-                      Novo Cliente
                     </button>
                   </div>
                 </div>
