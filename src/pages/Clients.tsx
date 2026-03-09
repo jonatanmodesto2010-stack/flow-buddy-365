@@ -350,7 +350,7 @@ const Clients = () => {
   return (
     <AppLayout>
       <div className="p-6">
-          <div className="max-w-7xl mx-auto flex gap-6">
+          <div className="max-w-[1600px] mx-auto flex gap-6">
             {/* Left Column - Client List */}
             <div className="flex-1 min-w-0">
               <div className="animate-fade-in">
