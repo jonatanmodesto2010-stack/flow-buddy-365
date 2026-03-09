@@ -180,11 +180,30 @@ export const Timeline = ({
     // Sync alert to IXC if description exists
     if (updatedEvent.description && updatedEvent.description.trim() && timeline.clientInfo.clientId && timeline.organization_id) {
       try {
+        // Buscar created_at real do evento recém-salvo no banco
+        const lineObj = lines.find(l => l.id === editingLineId);
+        const savedEvents = lineObj?.events || [];
+        const savedEvent = savedEvents.find(e => e.description === updatedEvent.description);
+        let eventCreatedAt = savedEvent?.created_at;
+
+        if (!eventCreatedAt) {
+          // Buscar do banco se não disponível localmente
+          const { data: dbEvents } = await supabase
+            .from('timeline_events')
+            .select('created_at, description')
+            .eq('line_id', editingLineId)
+            .eq('description', updatedEvent.description)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          eventCreatedAt = dbEvents?.[0]?.created_at || undefined;
+        }
+
         const { data: ixcResult, error: ixcError } = await supabase.functions.invoke('ixc-update-alert', {
           body: {
             organization_id: timeline.organization_id,
             ixc_client_id: timeline.clientInfo.clientId,
             alert_text: updatedEvent.description,
+            event_created_at: eventCreatedAt,
           },
         });
 
@@ -200,12 +219,14 @@ export const Timeline = ({
     setEditingLineId(null);
   };
 
-  const handleDeleteEvent = (id: string) => {
+  const handleDeleteEvent = async (id: string) => {
     if (editingLineId === null) return;
     const line = lines.find(l => l.id === editingLineId);
     if (!line) return;
     
     const lineEvents = line.events || [];
+    // Capturar dados do evento antes de remover para sync IXC
+    const deletedEvent = lineEvents.find(e => e.id === id);
     const updatedEvents = lineEvents.filter(e => e.id !== id);
     
     const currentLineIndex = lines.findIndex(l => l.id === editingLineId);
@@ -224,6 +245,22 @@ export const Timeline = ({
         
         setEditingEvent(null);
         setEditingLineId(null);
+        // Sync IXC remove after local update
+        if (deletedEvent?.description?.trim() && deletedEvent?.created_at && timeline.clientInfo.clientId && timeline.organization_id) {
+          try {
+            await supabase.functions.invoke('ixc-update-alert', {
+              body: {
+                organization_id: timeline.organization_id,
+                ixc_client_id: timeline.clientInfo.clientId,
+                alert_text: deletedEvent.description,
+                event_created_at: deletedEvent.created_at,
+                action: 'remove',
+              },
+            });
+          } catch (err) {
+            console.warn('IXC alert remove sync error:', err);
+          }
+        }
         return;
       }
       
@@ -239,6 +276,22 @@ export const Timeline = ({
         
         setEditingEvent(null);
         setEditingLineId(null);
+        // Sync IXC remove after local update
+        if (deletedEvent?.description?.trim() && deletedEvent?.created_at && timeline.clientInfo.clientId && timeline.organization_id) {
+          try {
+            await supabase.functions.invoke('ixc-update-alert', {
+              body: {
+                organization_id: timeline.organization_id,
+                ixc_client_id: timeline.clientInfo.clientId,
+                alert_text: deletedEvent.description,
+                event_created_at: deletedEvent.created_at,
+                action: 'remove',
+              },
+            });
+          } catch (err) {
+            console.warn('IXC alert remove sync error:', err);
+          }
+        }
         return;
       }
     }
@@ -247,6 +300,23 @@ export const Timeline = ({
     updateLine(editingLineId, updatedEvents);
     setEditingEvent(null);
     setEditingLineId(null);
+
+    // Sync IXC remove after local update
+    if (deletedEvent?.description?.trim() && deletedEvent?.created_at && timeline.clientInfo.clientId && timeline.organization_id) {
+      try {
+        await supabase.functions.invoke('ixc-update-alert', {
+          body: {
+            organization_id: timeline.organization_id,
+            ixc_client_id: timeline.clientInfo.clientId,
+            alert_text: deletedEvent.description,
+            event_created_at: deletedEvent.created_at,
+            action: 'remove',
+          },
+        });
+      } catch (err) {
+        console.warn('IXC alert remove sync error:', err);
+      }
+    }
   };
 
   const handleEventClick = (event: Event, lineId: string) => {

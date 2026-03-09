@@ -12,23 +12,30 @@ function encodeIxcToken(rawToken: string): string {
 
 function normalizeApiUrl(apiUrl: string): string {
   let url = apiUrl.replace(/\/+$/, '');
-  // If URL already contains /webservice/v1, extract up to that point
   const idx = url.toLowerCase().indexOf('/webservice/v1');
   if (idx !== -1) {
     url = url.substring(0, idx + '/webservice/v1'.length);
   } else {
-    // Append /webservice/v1 if not present
     url = `${url}/webservice/v1`;
   }
   return url;
 }
 
 function trimAlertEntries(alertText: string, maxEntries: number = 10): string {
-  // Split by newline followed by [ (our entry marker)
   const parts = alertText.split(/\n(?=\[)/);
   if (parts.length <= maxEntries) return alertText;
-  // Keep only the last maxEntries
   return parts.slice(parts.length - maxEntries).join('\n');
+}
+
+function formatAlertTimestamp(isoDatetime: string): string {
+  const d = new Date(isoDatetime);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `[${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}]`;
 }
 
 Deno.serve(async (req) => {
@@ -63,7 +70,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { organization_id, ixc_client_id, alert_text, action } = body;
+    const { organization_id, ixc_client_id, alert_text, action, event_created_at } = body;
 
     console.log(`ixc-update-alert: action=${action || 'update'}, org=${organization_id}, ixc_client=${ixc_client_id}`);
 
@@ -159,7 +166,79 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Step 2: Concatenate alert text
+    // Action: remove - remove exact line from alert
+    if (action === 'remove') {
+      if (!alert_text || !event_created_at) {
+        return new Response(JSON.stringify({ error: 'alert_text e event_created_at são obrigatórios para remoção' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const currentAlert = clientData.alerta || '';
+      const expectedLine = `${formatAlertTimestamp(event_created_at)} ${alert_text}`;
+
+      console.log(`ixc-update-alert remove: ixc_client=${ixc_client_id}, expectedLine="${expectedLine}"`);
+
+      const lines = currentAlert.split('\n');
+      const filtered = lines.filter((line: string) => line !== expectedLine);
+
+      if (filtered.length === lines.length) {
+        console.log(`ixc-update-alert remove: no match found, skipping PUT`);
+        return new Response(JSON.stringify({
+          success: true,
+          no_match: true,
+          ixc_client_id,
+          expected_line: expectedLine,
+          message: 'Linha não encontrada no alerta, nenhuma atualização realizada',
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const newAlert = filtered.join('\n');
+      const removedLine = expectedLine;
+
+      console.log(`ixc-update-alert remove: removing line, new alert length=${newAlert.length}`);
+
+      const updatePayload = { ...clientData, alerta: newAlert };
+
+      const putRes = await fetch(clientUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${encodedToken}`,
+        },
+        body: JSON.stringify(updatePayload),
+      });
+
+      const putText = await putRes.text();
+      console.log(`IXC PUT (remove) status: ${putRes.status}, response: ${putText.substring(0, 200)}`);
+
+      if (!putRes.ok) {
+        console.error(`IXC PUT (remove) error: ${putText.substring(0, 500)}`);
+        return new Response(JSON.stringify({
+          error: 'Falha ao atualizar alerta no IXC',
+          details: putText.substring(0, 300),
+          ixc_client_id,
+        }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        action: 'remove',
+        ixc_client_id,
+        removed_line: removedLine,
+        message: 'Linha removida do alerta com sucesso',
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Default action: add/update alert
     if (!alert_text) {
       return new Response(JSON.stringify({ error: 'alert_text é obrigatório para atualização' }), {
         status: 400,
@@ -167,14 +246,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const now = new Date();
-    const dd = String(now.getDate()).padStart(2, '0');
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const yyyy = now.getFullYear();
-    const hh = String(now.getHours()).padStart(2, '0');
-    const min = String(now.getMinutes()).padStart(2, '0');
-    const timestamp = `[${dd}/${mm}/${yyyy} ${hh}:${min}]`;
-
+    const timestamp = formatAlertTimestamp(event_created_at || new Date().toISOString());
     const currentAlert = clientData.alerta || '';
     const newEntry = `${timestamp} ${alert_text}`;
     const concatenated = currentAlert ? `${currentAlert}\n${newEntry}` : newEntry;
@@ -182,7 +254,7 @@ Deno.serve(async (req) => {
 
     console.log(`Alert: current length=${currentAlert.length}, new entry="${newEntry}", trimmed entries`);
 
-    // Step 3: PUT with full payload, only changing alerta
+    // PUT with full payload, only changing alerta
     const updatePayload = { ...clientData, alerta: trimmedAlert };
 
     const putRes = await fetch(clientUrl, {

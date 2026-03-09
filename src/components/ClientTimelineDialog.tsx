@@ -129,6 +129,7 @@ export const ClientTimelineDialog = ({
               position: e.position as 'top' | 'bottom',
               status: e.status as 'created' | 'resolved' | 'no_response',
               time: e.event_time || undefined,
+              created_at: e.created_at,
             })),
           };
         })
