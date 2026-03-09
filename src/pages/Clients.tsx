@@ -22,7 +22,7 @@ const ITEMS_PER_PAGE = 30;
 const CLIENT_COLUMNS = 'id, client_name, client_id, status, is_active, organization_id, ixc_filial_id, ixc_filial_name, start_date, created_at, updated_at, user_id, completed_at, completion_notes, boleto_value, due_date';
 
 const Clients = () => {
-  
+
   const [clients, setClients] = useState<ClientTimeline[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [overdueDaysMap, setOverdueDaysMap] = useState<Map<string, number>>(new Map());
@@ -38,7 +38,7 @@ const Clients = () => {
   const [newClientData, setNewClientData] = useState({
     client_name: '',
     client_id: '',
-    start_date: new Date().toISOString().split('T')[0],
+    start_date: new Date().toISOString().split('T')[0]
   });
   const [showClientTimelineDialog, setShowClientTimelineDialog] = useState(false);
   const [clientForTimeline, setClientForTimeline] = useState<any>(null);
@@ -53,12 +53,12 @@ const Clients = () => {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) setUser(session.user);
-      else navigate('/auth');
+      if (session?.user) setUser(session.user);else
+      navigate('/auth');
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      if (session?.user) setUser(session.user);
-      else navigate('/auth');
+      if (session?.user) setUser(session.user);else
+      navigate('/auth');
     });
     return () => subscription.unsubscribe();
   }, [navigate]);
@@ -77,13 +77,13 @@ const Clients = () => {
   const loadFiliais = async () => {
     if (!organizationId) return;
     try {
-      const { data } = await (supabaseClient as any)
-        .from('unique_client_timelines')
-        .select('ixc_filial_id, ixc_filial_name')
-        .eq('organization_id', organizationId)
-        .not('ixc_filial_id', 'is', null)
-        .not('ixc_filial_name', 'is', null);
-      
+      const { data } = await (supabaseClient as any).
+      from('unique_client_timelines').
+      select('ixc_filial_id, ixc_filial_name').
+      eq('organization_id', organizationId).
+      not('ixc_filial_id', 'is', null).
+      not('ixc_filial_name', 'is', null);
+
       if (data) {
         const map = new Map<string, string>();
         for (const t of data) {
@@ -104,10 +104,10 @@ const Clients = () => {
       setLoading(true);
 
       // Build server-side query
-      let query = (supabaseClient as any)
-        .from('unique_client_timelines')
-        .select(CLIENT_COLUMNS, { count: 'exact' })
-        .eq('organization_id', organizationId);
+      let query = (supabaseClient as any).
+      from('unique_client_timelines').
+      select(CLIENT_COLUMNS, { count: 'exact' }).
+      eq('organization_id', organizationId);
 
       // Server-side filters
       if (filialFilter !== 'all') {
@@ -132,9 +132,9 @@ const Clients = () => {
       // 'all' = no extra filter
 
       // Sort: blocked first (is_active asc), then by name
-      query = query
-        .order('is_active', { ascending: true })
-        .order('client_name', { ascending: true });
+      query = query.
+      order('is_active', { ascending: true }).
+      order('client_name', { ascending: true });
 
       // Paginate server-side
       const start = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -151,7 +151,7 @@ const Clients = () => {
       if (data && data.length > 0) {
         loadOverdueDays(data);
         // Load online status for blocked clients
-        const blockedClients = data.filter(c => !c.is_active && c.status !== 'archived' && c.status !== 'completed');
+        const blockedClients = data.filter((c) => !c.is_active && c.status !== 'archived' && c.status !== 'completed');
         if (blockedClients.length > 0) {
           loadOnlineStatus(blockedClients);
         } else {
@@ -172,15 +172,15 @@ const Clients = () => {
   const loadOverdueDays = async (timelines: ClientTimeline[]) => {
     try {
       setOverdueDaysLoading(true);
-      const timelineIds = timelines.map(t => t.id);
+      const timelineIds = timelines.map((t) => t.id);
 
-      const { data: boletos } = await supabaseClient
-        .from('client_boletos')
-        .select('timeline_id, due_date, status')
-        .in('timeline_id', timelineIds);
+      const { data: boletos } = await supabaseClient.
+      from('client_boletos').
+      select('timeline_id, due_date, status').
+      in('timeline_id', timelineIds);
 
-      const boletosMap = new Map<string, { due_date: string; status: string }[]>();
-      for (const b of (boletos || [])) {
+      const boletosMap = new Map<string, {due_date: string;status: string;}[]>();
+      for (const b of boletos || []) {
         if (!boletosMap.has(b.timeline_id)) boletosMap.set(b.timeline_id, []);
         boletosMap.get(b.timeline_id)!.push(b);
       }
@@ -201,14 +201,14 @@ const Clients = () => {
   const loadOnlineStatus = async (blockedClients: ClientTimeline[]) => {
     try {
       setOnlineLoading(true);
-      const clientIds = blockedClients.map(c => c.client_id).filter(Boolean);
+      const clientIds = blockedClients.map((c) => c.client_id).filter(Boolean);
       if (clientIds.length === 0) {
         setOnlineClients(new Set());
         return;
       }
 
       const { data, error } = await supabase.functions.invoke('ixc-check-online', {
-        body: { organization_id: organizationId, client_ids: clientIds },
+        body: { organization_id: organizationId, client_ids: clientIds }
       });
 
       if (error) {
@@ -278,8 +278,8 @@ const Clients = () => {
     }
 
     try {
-      const { data: existing } = await supabaseClient
-        .from('client_timelines').select('id').eq('organization_id', organizationId).ilike('client_name', clientNameTrimmed);
+      const { data: existing } = await supabaseClient.
+      from('client_timelines').select('id').eq('organization_id', organizationId).ilike('client_name', clientNameTrimmed);
       if (existing && existing.length > 0) {
         toast({ title: 'Nome duplicado', description: `Já existe um cliente com o nome "${clientNameTrimmed}".`, variant: 'destructive' });
         return;
@@ -288,25 +288,25 @@ const Clients = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabaseClient
-        .from('client_timelines')
-        .insert({
-          client_name: clientNameTrimmed,
-          client_id: newClientData.client_id.trim() || null,
-          start_date: newClientData.start_date,
-          is_active: true,
-          status: 'active',
-          organization_id: organizationId,
-          user_id: user.id,
-        })
-        .select()
-        .single();
+      const { data, error } = await supabaseClient.
+      from('client_timelines').
+      insert({
+        client_name: clientNameTrimmed,
+        client_id: newClientData.client_id.trim() || null,
+        start_date: newClientData.start_date,
+        is_active: true,
+        status: 'active',
+        organization_id: organizationId,
+        user_id: user.id
+      }).
+      select().
+      single();
 
       if (error) throw error;
       await loadClients();
       setNewClientModalOpen(false);
       toast({ title: 'Cliente criado', description: `Cliente "${clientNameTrimmed}" foi adicionado com sucesso.` });
-      if (data) { setSelectedClient(data); setModalOpen(true); }
+      if (data) {setSelectedClient(data);setModalOpen(true);}
       setNewClientData({ client_name: '', client_id: '', start_date: new Date().toISOString().split('T')[0] });
     } catch (error: any) {
       toast({ title: 'Erro ao criar cliente', description: error.message, variant: 'destructive' });
@@ -337,14 +337,14 @@ const Clients = () => {
           <div className="max-w-7xl mx-auto">
             <div className="h-9 w-48 bg-muted animate-pulse rounded mb-6" />
             <div className="flex flex-col gap-3">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
-              ))}
+              {[1, 2, 3, 4].map((i) =>
+              <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
+              )}
             </div>
           </div>
         </div>
-      </AppLayout>
-    );
+      </AppLayout>);
+
   }
 
   return (
@@ -356,30 +356,30 @@ const Clients = () => {
               <div className="animate-fade-in">
                 <div className="flex items-center gap-4 mb-6">
                   <h2 className="text-2xl font-bold text-foreground">Clientes</h2>
-                  {filiais.length > 0 && (
-                    <Select value={filialFilter} onValueChange={setFilialFilter}>
+                  {filiais.length > 0 &&
+                <Select value={filialFilter} onValueChange={setFilialFilter}>
                       <SelectTrigger className="w-[220px] h-9">
                         <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
                         <SelectValue placeholder="Todas filiais" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todas filiais</SelectItem>
-                        {filiais.map(([id, name]) => (
-                          <SelectItem key={id} value={id}>{name}</SelectItem>
-                        ))}
+                        {filiais.map(([id, name]) =>
+                    <SelectItem key={id} value={id}>{name}</SelectItem>
+                    )}
                       </SelectContent>
                     </Select>
-                  )}
+                }
                 </div>
 
-                <ClientSearchFilters 
-                  onFilterChange={(filters) => {
-                    setSearchTerm(filters.searchTerm || '');
-                    setStatusFilter(filters.statusFilter || 'all');
-                  }}
-                  organizationId={organizationId}
-                  pageName="clients"
-                />
+                <ClientSearchFilters
+                onFilterChange={(filters) => {
+                  setSearchTerm(filters.searchTerm || '');
+                  setStatusFilter(filters.statusFilter || 'all');
+                }}
+                organizationId={organizationId}
+                pageName="clients" />
+              
 
                 {/* Pagination Controls */}
                 <div className="mb-4 flex items-center justify-between gap-4">
@@ -387,13 +387,13 @@ const Clients = () => {
                     <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Primeira página">
                       <ChevronsLeft size={16} />
                     </button>
-                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Página anterior">
+                    <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Página anterior">
                       <ChevronLeft size={16} />
                     </button>
                     <button onClick={loadClients} className="p-1.5 rounded hover:bg-muted transition-colors" title="Atualizar">
                       <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                     </button>
-                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Próxima página">
+                    <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Próxima página">
                       <ChevronRight size={16} />
                     </button>
                     <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Última página">
@@ -417,17 +417,17 @@ const Clients = () => {
                       </SelectContent>
                     </Select>
                     <button
-                      onClick={() => navigate('/history')}
-                      className="px-6 py-2 bg-primary/10 text-primary rounded-lg font-semibold hover:bg-primary/20 transition-all flex items-center gap-2 whitespace-nowrap"
-                    >
+                    onClick={() => navigate('/history')}
+                    className="px-6 py-2 bg-primary/10 text-primary rounded-lg font-semibold hover:bg-primary/20 transition-all flex items-center gap-2 whitespace-nowrap">
+                    
                       <History size={18} />
                       Histórico
                     </button>
 
                     <button
-                      onClick={() => setNewClientModalOpen(true)}
-                      className="px-6 py-2 bg-gradient-primary text-primary-foreground rounded-lg font-semibold hover:bg-gradient-hover transition-all flex items-center gap-2 whitespace-nowrap"
-                    >
+                    onClick={() => setNewClientModalOpen(true)}
+                    className="px-6 py-2 bg-gradient-primary text-primary-foreground rounded-lg font-semibold hover:bg-gradient-hover transition-all flex items-center gap-2 whitespace-nowrap">
+                    
                       <Plus size={18} />
                       Novo Cliente
                     </button>
@@ -435,20 +435,20 @@ const Clients = () => {
                 </div>
 
                 {/* Client List */}
-                {clients.length === 0 && !loading ? (
-                  <div className="text-center py-20 text-muted-foreground">
+                {clients.length === 0 && !loading ?
+              <div className="text-center py-20 text-muted-foreground">
                     <p>Nenhum cliente encontrado</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2 w-full">
+                  </div> :
+
+              <div className="flex flex-col gap-2 w-full">
                     {sortedClients.map((client) => {
-                      const info = getClientBadgeInfo(client);
-                      return (
-                        <div
-                          key={client.id}
-                          className={`w-full rounded-lg p-4 flex items-center gap-4 transition-all duration-150 hover:opacity-90 cursor-pointer ${getCardStyle(info)}`}
-                          onClick={() => handleOpenModal(client)}
-                        >
+                  const info = getClientBadgeInfo(client);
+                  return (
+                    <div
+                      key={client.id}
+                      className={`w-full rounded-lg p-4 flex items-center gap-4 transition-all duration-150 hover:opacity-90 cursor-pointer ${getCardStyle(info)}`}
+                      onClick={() => handleOpenModal(client)}>
+                      
                           <div className="flex-1 min-w-0">
                             <h3 className="text-card-foreground font-bold text-base uppercase tracking-wide truncate">
                               {client.client_name}
@@ -456,73 +456,73 @@ const Clients = () => {
                           </div>
 
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            {info.overdueDays > 0 && (
-                              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${info.isBlocked ? 'bg-red-500 text-white' : info.isOverdue ? 'bg-yellow-500 text-black' : 'bg-green-500 text-white'}`}>
+                            {info.overdueDays > 0 &&
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${info.isBlocked ? 'bg-red-500 text-white' : info.isOverdue ? 'bg-yellow-500 text-black' : 'bg-green-500 text-white'}`}>
                                 {info.overdueDays}d
                               </div>
-                            )}
+                        }
 
-                            {info.isBlocked && (
-                              <>
+                            {info.isBlocked &&
+                        <>
                                 <div className="px-3 py-1 bg-red-500/20 text-red-400 text-xs rounded-full flex items-center gap-1 font-semibold border border-red-500/30">
                                   <Lock size={12} />
                                   BLOQUEADO
                                 </div>
                                 {client.client_id && (
-                                  onlineClients.has(client.client_id) ? (
-                                    <div className="px-2.5 py-1 bg-green-500/20 text-green-400 text-xs rounded-full flex items-center gap-1 font-semibold border border-green-500/30">
+                          onlineClients.has(client.client_id) ?
+                          <div className="px-2.5 py-1 text-xs rounded-full flex items-center gap-1 font-semibold border border-green-500/30 text-muted-foreground bg-emerald-500">
                                       <Wifi size={11} />
                                       ON
-                                    </div>
-                                  ) : !onlineLoading ? (
-                                    <div className="px-2.5 py-1 bg-muted text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border">
+                                    </div> :
+                          !onlineLoading ?
+                          <div className="px-2.5 py-1 bg-muted text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border">
                                       <WifiOff size={11} />
                                       OFF
-                                    </div>
-                                  ) : null
-                                )}
+                                    </div> :
+                          null)
+                          }
                               </>
-                            )}
+                        }
 
-                            {info.isInactive && (
-                              <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">
+                            {info.isInactive &&
+                        <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">
                                 Inativo
                               </div>
-                            )}
+                        }
 
-                            {info.isCompleted && (
-                              <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">
+                            {info.isCompleted &&
+                        <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">
                                 Finalizado
                               </div>
-                            )}
+                        }
 
                             <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenTimelineDialog(client);
-                              }}
-                              className="border-green-500/30 hover:bg-green-500/10 text-green-400 hover:text-green-300"
-                              title="Ver Timeline"
-                            >
+                          variant="outline"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenTimelineDialog(client);
+                          }}
+                          className="border-green-500/30 hover:bg-green-500/10 text-green-400 hover:text-green-300"
+                          title="Ver Timeline">
+                          
                               <TrendingUp className="w-4 h-4" />
                             </Button>
                           </div>
-                        </div>
-                      );
-                    })}
+                        </div>);
+
+                })}
                   </div>
-                )}
+              }
               </div>
             </div>
 
             {/* Right Column - Widgets */}
             <div className="hidden lg:block w-[380px] flex-shrink-0 space-y-4">
-              <CalendarWidget 
-                organizationId={organizationId}
-                onClientClick={(name) => setSearchTerm(name)}
-              />
+              <CalendarWidget
+              organizationId={organizationId}
+              onClientClick={(name) => setSearchTerm(name)} />
+            
             </div>
           </div>
         </div>
@@ -541,10 +541,10 @@ const Clients = () => {
                 id="new-client-name"
                 placeholder="Ex: João Silva"
                 value={newClientData.client_name}
-                onChange={(e) => setNewClientData(prev => ({ ...prev, client_name: e.target.value }))}
+                onChange={(e) => setNewClientData((prev) => ({ ...prev, client_name: e.target.value }))}
                 autoFocus
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateClient(); } }}
-              />
+                onKeyDown={(e) => {if (e.key === 'Enter') {e.preventDefault();handleCreateClient();}}} />
+              
             </div>
             <div className="space-y-2">
               <label htmlFor="new-client-id" className="text-sm font-medium">ID do Cliente</label>
@@ -552,8 +552,8 @@ const Clients = () => {
                 id="new-client-id"
                 placeholder="Ex: 00064"
                 value={newClientData.client_id}
-                onChange={(e) => setNewClientData(prev => ({ ...prev, client_id: e.target.value }))}
-              />
+                onChange={(e) => setNewClientData((prev) => ({ ...prev, client_id: e.target.value }))} />
+              
             </div>
             <div className="space-y-2">
               <label htmlFor="new-client-date" className="text-sm font-medium">Data de Cadastro</label>
@@ -561,8 +561,8 @@ const Clients = () => {
                 id="new-client-date"
                 type="date"
                 value={newClientData.start_date}
-                onChange={(e) => setNewClientData(prev => ({ ...prev, start_date: e.target.value }))}
-              />
+                onChange={(e) => setNewClientData((prev) => ({ ...prev, start_date: e.target.value }))} />
+              
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -572,24 +572,24 @@ const Clients = () => {
         </DialogContent>
       </Dialog>
 
-      {selectedClient && (
-        <ClientDashboardModal
-          client={selectedClient}
-          isOpen={modalOpen}
-          onClose={() => { setModalOpen(false); setSelectedClient(null); }}
-          onSave={handleSaveClient}
-        />
-      )}
+      {selectedClient &&
+      <ClientDashboardModal
+        client={selectedClient}
+        isOpen={modalOpen}
+        onClose={() => {setModalOpen(false);setSelectedClient(null);}}
+        onSave={handleSaveClient} />
 
-      {clientForTimeline && (
-        <ClientTimelineDialog
-          client={clientForTimeline}
-          isOpen={showClientTimelineDialog}
-          onClose={() => { setShowClientTimelineDialog(false); setClientForTimeline(null); }}
-        />
-      )}
-    </AppLayout>
-  );
+      }
+
+      {clientForTimeline &&
+      <ClientTimelineDialog
+        client={clientForTimeline}
+        isOpen={showClientTimelineDialog}
+        onClose={() => {setShowClientTimelineDialog(false);setClientForTimeline(null);}} />
+
+      }
+    </AppLayout>);
+
 };
 
 export default Clients;
