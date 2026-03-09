@@ -116,7 +116,7 @@ const Dashboard = () => {
     today.setHours(0, 0, 0, 0);
 
     // Boleto calculations
-    const pendingBoletos = filteredBoletos.filter(b => b.status !== 'pago' && b.status !== 'cancelado');
+    const pendingBoletos = filteredBoletos.filter(b => b.status !== 'pago' && b.status !== 'cancelado' && getOpenValue(b) > 0);
     const overdueBoletos = pendingBoletos.filter(b => {
       const d = new Date(b.due_date); d.setHours(0, 0, 0, 0);
       return today.getTime() > d.getTime();
@@ -126,8 +126,8 @@ const Dashboard = () => {
       return today.getTime() <= d.getTime();
     });
 
-    const totalOverdueValue = overdueBoletos.reduce((s, b) => s + (Number(b.boleto_value) || 0), 0);
-    const totalUpcomingValue = upcomingBoletos.reduce((s, b) => s + (Number(b.boleto_value) || 0), 0);
+    const totalOverdueValue = overdueBoletos.reduce((s, b) => s + getOpenValue(b), 0);
+    const totalUpcomingValue = upcomingBoletos.reduce((s, b) => s + getOpenValue(b), 0);
     const totalReceivable = totalOverdueValue + totalUpcomingValue;
     const paidBoletos = filteredBoletos.filter(b => b.status === 'pago');
     const totalPaidValue = paidBoletos.reduce((s, b) => s + (Number(b.boleto_value) || 0), 0);
