@@ -642,7 +642,7 @@ Deno.serve(async (req) => {
             if (t.client_id) clientToTimeline.set(t.client_id, t.id);
           }
 
-          const timelineIds = (timelines || []).map(t => t.id);
+          const timelineIds = allTimelines.map(t => t.id);
           let existingBoletos = new Map<string, any>();
           if (timelineIds.length > 0) {
             for (let i = 0; i < timelineIds.length; i += 200) {
