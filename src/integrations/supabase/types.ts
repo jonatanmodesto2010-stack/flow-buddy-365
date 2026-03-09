@@ -238,6 +238,7 @@ export type Database = {
       client_boletos: {
         Row: {
           boleto_value: number
+          boleto_value_open: number | null
           created_at: string | null
           description: string | null
           due_date: string
@@ -249,6 +250,7 @@ export type Database = {
         }
         Insert: {
           boleto_value: number
+          boleto_value_open?: number | null
           created_at?: string | null
           description?: string | null
           due_date: string
@@ -260,6 +262,7 @@ export type Database = {
         }
         Update: {
           boleto_value?: number
+          boleto_value_open?: number | null
           created_at?: string | null
           description?: string | null
           due_date?: string

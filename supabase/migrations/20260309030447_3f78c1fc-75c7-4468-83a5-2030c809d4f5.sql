@@ -1,0 +1,1 @@
+ALTER TABLE public.client_boletos ADD COLUMN IF NOT EXISTS boleto_value_open numeric DEFAULT NULL;
