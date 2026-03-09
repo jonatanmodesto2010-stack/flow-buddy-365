@@ -33,6 +33,7 @@ export const IntegrationsSettings = () => {
   const [apiUrl, setApiUrl] = useState('');
   const [apiToken, setApiToken] = useState('');
   const [apiUrlContracts, setApiUrlContracts] = useState('');
+  const [osRetiradaAssuntoId, setOsRetiradaAssuntoId] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
