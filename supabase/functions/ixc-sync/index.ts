@@ -60,7 +60,11 @@ async function ixcRequest(apiUrl: string, encodedToken: string, endpoint: string
 
 async function checkCancelled(supabase: any, syncId: string): Promise<boolean> {
   const { data } = await supabase.from('integration_sync_log').select('status').eq('id', syncId).single();
-  return data?.status === 'cancelled';
+  if (data?.status === 'cancelled') {
+    console.log(`[CANCEL] Cancellation detected for sync ${syncId}`);
+    return true;
+  }
+  return false;
 }
 
 async function updateSyncLog(supabase: any, syncId: string, updates: Record<string, any>) {
@@ -475,6 +479,39 @@ Deno.serve(async (req) => {
       const syncStartedAt = new Date().toISOString();
 
       const syncType = action === 'sync_boletos' ? 'boletos' : action === 'sync_clients' ? 'clients' : action === 'sync_areceber' ? 'areceber' : action === 'check_blocked' ? 'blocked_check' : 'full';
+
+      // CONCURRENT SYNC PROTECTION: Check for already running syncs for this org+type
+      const { data: runningSyncs } = await supabase
+        .from('integration_sync_log')
+        .select('id, started_at')
+        .eq('organization_id', organization_id)
+        .eq('status', 'running')
+        .order('created_at', { ascending: false });
+
+      if (runningSyncs && runningSyncs.length > 0) {
+        // Check if any running sync is stale (>10 min), auto-cancel it
+        const now = Date.now();
+        for (const rs of runningSyncs) {
+          const age = (now - new Date(rs.started_at).getTime()) / 1000;
+          if (age > 600) {
+            console.log(`[PROTECTION] Auto-cancelling stale sync ${rs.id} (age: ${Math.round(age)}s)`);
+            await updateSyncLog(supabase, rs.id, {
+              status: 'error',
+              error_message: `Auto-cancelado: sync travada por ${Math.round(age)}s`,
+              completed_at: new Date().toISOString(),
+            });
+          } else {
+            // Active sync still running - block new one
+            console.log(`[PROTECTION] Blocking new sync: existing sync ${rs.id} still running (age: ${Math.round(age)}s)`);
+            return new Response(JSON.stringify({
+              error: 'Já existe uma sincronização em andamento para esta organização',
+              running_sync_id: rs.id,
+              running_since: rs.started_at,
+            }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+        }
+      }
+
       const { data: syncLog } = await supabase
         .from('integration_sync_log')
         .insert({ organization_id, sync_type: syncType, status: 'running', started_at: syncStartedAt, records_processed: 0, total_records: 0 })
@@ -1150,9 +1187,29 @@ Deno.serve(async (req) => {
 
       } catch (e: any) {
         if (e.message === 'CANCELLED') {
+          const cancelTime = new Date().toISOString();
+          const cancelDuration = ((Date.now() - new Date(syncStartedAt).getTime()) / 1000).toFixed(1);
+          console.log(`[CANCEL] Sync ${syncId} cancelled after ${cancelDuration}s`);
+          console.log(`[CANCEL] Partial progress: clients=${orgResult.clients_inserted || 0}+${orgResult.clients_updated || 0}, boletos=${orgResult.boletos_inserted || 0}+${orgResult.boletos_updated || 0}`);
+          
           orgResult.errors.push('Sincronização cancelada pelo usuário');
           if (syncId) {
-            await updateSyncLog(supabase, syncId, { status: 'cancelled', completed_at: new Date().toISOString() });
+            const cancelMetadata: any = {
+              cancelledAt: cancelTime,
+              cancelDurationSeconds: parseFloat(cancelDuration),
+              partialMetrics: allMetrics.map(m => ({
+                mode: m.mode, pagesProcessed: m.pagesProcessed,
+                inserts: m.inserts, updates: m.updates, ignored: m.ignored,
+                fallbacks: m.fallbacks,
+              })),
+            };
+            await updateSyncLog(supabase, syncId, {
+              status: 'cancelled',
+              completed_at: cancelTime,
+              records_created: (orgResult.clients_inserted || 0) + (orgResult.boletos_inserted || 0) + (orgResult.clients_discovered || 0),
+              records_updated: (orgResult.clients_updated || 0) + (orgResult.boletos_updated || 0) + (orgResult.debt_updated || 0),
+              sync_metadata: cancelMetadata,
+            });
           }
           // Do NOT update last_sync_at on cancellation
         } else {

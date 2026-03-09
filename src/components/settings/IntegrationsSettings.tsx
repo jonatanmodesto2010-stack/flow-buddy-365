@@ -228,15 +228,28 @@ export const IntegrationsSettings = () => {
   };
 
   const startSync = async (syncAction: string) => {
-    if (syncProgress?.status === 'running') return;
+    if (syncProgress?.status === 'running') {
+      toast({ title: 'Já existe uma sincronização em andamento', variant: 'destructive' });
+      return;
+    }
     try {
       // Fire and forget - the edge function will create the sync log
-      supabase.functions.invoke('ixc-sync', {
+      const response = supabase.functions.invoke('ixc-sync', {
         body: { action: syncAction, organization_id: organizationId },
       });
 
       // Wait a moment then start polling for the new sync log
       setTimeout(async () => {
+        // Check if the function returned a 409 conflict
+        const result = await response;
+        if (result.error) {
+          const errorBody = result.error?.message || '';
+          if (errorBody.includes('409') || errorBody.includes('em andamento')) {
+            toast({ title: 'Sincronização já em andamento', description: 'Aguarde a conclusão da sincronização atual.', variant: 'destructive' });
+            return;
+          }
+        }
+
         const { data } = await supabase
           .from('integration_sync_log')
           .select('*')
