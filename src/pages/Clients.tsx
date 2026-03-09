@@ -494,8 +494,7 @@ const Clients = () => {
                             {info.isBlocked &&
                         <>
                                 <div className="px-3 py-1 bg-red-500/20 text-red-400 text-xs rounded-full flex items-center gap-1 font-semibold border border-red-500/30">
-                                  <Lock size={12} />
-                                  BLOQUEADO
+                                  🔒
                                 </div>
                                 {client.client_id && (
                           onlineClients.has(client.client_id) ?
