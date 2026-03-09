@@ -544,6 +544,7 @@ export type Database = {
           records_updated: number | null
           started_at: string | null
           status: string
+          sync_metadata: Json | null
           sync_type: string
           total_records: number | null
         }
@@ -558,6 +559,7 @@ export type Database = {
           records_updated?: number | null
           started_at?: string | null
           status?: string
+          sync_metadata?: Json | null
           sync_type: string
           total_records?: number | null
         }
@@ -572,6 +574,7 @@ export type Database = {
           records_updated?: number | null
           started_at?: string | null
           status?: string
+          sync_metadata?: Json | null
           sync_type?: string
           total_records?: number | null
         }
@@ -737,6 +740,8 @@ export type Database = {
           integration_type: string
           is_active: boolean
           ixc_os_retirada_assunto_id: string | null
+          last_boleto_sync_at: string | null
+          last_sync_at: string | null
           organization_id: string
           updated_at: string | null
         }
@@ -749,6 +754,8 @@ export type Database = {
           integration_type?: string
           is_active?: boolean
           ixc_os_retirada_assunto_id?: string | null
+          last_boleto_sync_at?: string | null
+          last_sync_at?: string | null
           organization_id: string
           updated_at?: string | null
         }
@@ -761,6 +768,8 @@ export type Database = {
           integration_type?: string
           is_active?: boolean
           ixc_os_retirada_assunto_id?: string | null
+          last_boleto_sync_at?: string | null
+          last_sync_at?: string | null
           organization_id?: string
           updated_at?: string | null
         }
