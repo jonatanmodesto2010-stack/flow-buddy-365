@@ -138,25 +138,46 @@ const Calendar = () => {
       
       console.log('🔄 Carregando eventos para userId:', userId);
       
-      // Buscar timelines pela organização ao invés de user_id
-      const { data: userRoles } = await supabaseClient
+      // Buscar organização do usuário com fallback seguro para múltiplos registros
+      const { data: userRole, error: userRoleError } = await supabaseClient
         .from('user_roles')
         .select('organization_id')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+
+      let organizationId = userRole?.organization_id ?? null;
+
+      if (userRoleError) {
+        const isMultipleRowsError =
+          userRoleError.code === 'PGRST116' ||
+          userRoleError.message?.toLowerCase().includes('multiple');
+
+        if (isMultipleRowsError) {
+          const { data: fallbackRoles, error: fallbackError } = await supabaseClient
+            .from('user_roles')
+            .select('organization_id')
+            .eq('user_id', userId)
+            .limit(1);
+
+          if (fallbackError) throw fallbackError;
+          organizationId = fallbackRoles?.[0]?.organization_id ?? null;
+        } else {
+          throw userRoleError;
+        }
+      }
       
-      if (!userRoles?.organization_id) {
+      if (!organizationId) {
         console.error('❌ Usuário sem organização');
         setLoading(false);
         return;
       }
       
-      console.log('🏢 Organization ID:', userRoles.organization_id);
+      console.log('🏢 Organization ID:', organizationId);
       
       const { data: timelines, error: timelinesError } = await supabaseClient
         .from('client_timelines')
         .select('id, client_name')
-        .eq('organization_id', userRoles.organization_id);
+        .eq('organization_id', organizationId);
 
       if (timelinesError) throw timelinesError;
       
