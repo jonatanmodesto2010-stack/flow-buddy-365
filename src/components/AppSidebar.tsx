@@ -15,18 +15,18 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
-} from '@/components/ui/sidebar';
+  useSidebar } from
+'@/components/ui/sidebar';
 
 const menuItems = [
-  { icon: Users, label: 'Clientes', path: '/clients' },
-  { icon: Calendar, label: 'Calendário', path: '/calendar' },
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-  { icon: BarChart3, label: 'Relatórios', path: '/reports' },
-  { icon: CreditCard, label: 'Assinatura', path: '/subscription' },
-  { icon: Settings, label: 'Configurações', path: '/settings' },
-  { icon: BookOpen, label: 'Manual', path: '/manual' },
-];
+{ icon: Users, label: 'Clientes', path: '/clients' },
+{ icon: Calendar, label: 'Calendário', path: '/calendar' },
+{ icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
+{ icon: BarChart3, label: 'Relatórios', path: '/reports' },
+{ icon: CreditCard, label: 'Assinatura', path: '/subscription' },
+{ icon: Settings, label: 'Configurações', path: '/settings' },
+{ icon: BookOpen, label: 'Manual', path: '/manual' }];
+
 
 export function AppSidebar() {
   const navigate = useNavigate();
@@ -36,9 +36,9 @@ export function AppSidebar() {
   const { isSuperAdmin } = useSuperAdmin();
 
   const allItems = [
-    ...menuItems,
-    ...(isSuperAdmin ? [{ icon: Shield, label: 'Super Admin', path: '/admin' }] : []),
-  ];
+  ...menuItems,
+  ...(isSuperAdmin ? [{ icon: Shield, label: 'Super Admin', path: '/admin' }] : [])];
+
 
   const isActive = (path: string) => {
     if (path === '/clients') return location.pathname === '/clients' || location.pathname === '/';
@@ -49,41 +49,41 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-border/40 pb-3">
-        {!collapsed ? (
-          <div className="flex items-center gap-2 px-2 pt-1">
-            <img src={logo} alt={APP_NAME} className="h-8 object-contain" />
-          </div>
-        ) : (
-          <div className="flex justify-center pt-1">
+        {!collapsed ?
+        <div className="flex items-center gap-2 px-2 pt-1">
+            <img alt={APP_NAME} className="h-8 object-contain border-0" src="/lovable-uploads/4e634900-836e-43b2-9b54-04784b2974bb.png" />
+          </div> :
+
+        <div className="flex justify-center pt-1">
             <img src={logoIcon} alt={APP_NAME} className="h-7 w-7 object-contain" />
           </div>
-        )}
+        }
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {allItems.map((item) => (
-                <SidebarMenuItem key={item.path}>
+              {allItems.map((item) =>
+              <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton
-                    onClick={() => navigate(item.path)}
-                    isActive={isActive(item.path)}
-                    tooltip={item.label}
-                  >
+                  onClick={() => navigate(item.path)}
+                  isActive={isActive(item.path)}
+                  tooltip={item.label}>
+                  
                     <item.icon />
                     <span>{item.label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-              ))}
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter>
-        {!collapsed ? (
-          <div className="rounded-xl border border-border/60 bg-card/50 p-3 shadow-sm backdrop-blur-sm">
+        {!collapsed ?
+        <div className="rounded-xl border border-border/60 bg-card/50 p-3 shadow-sm backdrop-blur-sm">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold tracking-tight text-foreground">{APP_NAME}</span>
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-semibold">
@@ -99,13 +99,13 @@ export function AppSidebar() {
                 <span className="font-medium">Estável</span>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-1 py-1">
+          </div> :
+
+        <div className="flex flex-col items-center gap-1 py-1">
             <span className="text-[9px] font-mono text-muted-foreground">v{APP_VERSION}</span>
           </div>
-        )}
+        }
       </SidebarFooter>
-    </Sidebar>
-  );
+    </Sidebar>);
+
 }
