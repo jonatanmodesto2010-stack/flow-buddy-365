@@ -15,6 +15,7 @@ interface Integration {
   api_url: string | null;
   api_token: string | null;
   api_url_contracts: string | null;
+  ixc_os_retirada_assunto_id: string | null;
   is_active: boolean;
 }
 
