@@ -1290,15 +1290,26 @@ export type Database = {
         }
         Returns: undefined
       }
-      batch_upsert_boletos: {
-        Args: {
-          p_dates: string[]
-          p_ids: string[]
-          p_statuses: string[]
-          p_values: number[]
-        }
-        Returns: undefined
-      }
+      batch_upsert_boletos:
+        | {
+            Args: {
+              p_dates: string[]
+              p_ids: string[]
+              p_statuses: string[]
+              p_values: number[]
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_dates: string[]
+              p_ids: string[]
+              p_statuses: string[]
+              p_values: number[]
+              p_values_open?: number[]
+            }
+            Returns: undefined
+          }
       batch_upsert_clients:
         | {
             Args: {

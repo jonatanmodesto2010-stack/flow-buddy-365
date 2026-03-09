@@ -863,6 +863,7 @@ Deno.serve(async (req) => {
 
             const ixcBoletoId = String(boleto.id);
             const valor = parseFloat(boleto.valor || '0');
+            const valorAberto = parseFloat(boleto.valor_aberto || '0');
             const dataVencimento = boleto.data_vencimento || '';
 
             let status = 'pendente';
@@ -875,13 +876,14 @@ Deno.serve(async (req) => {
             const existing = existingBoletos.get(ixcBoletoId);
             if (existing) {
               if (existing.status !== status || Number(existing.boleto_value) !== valor || existing.due_date !== dataVencimento) {
-                boletosToUpdate.push({ id: existing.id, status, boleto_value: valor, due_date: dataVencimento });
+                boletosToUpdate.push({ id: existing.id, status, boleto_value: valor, due_date: dataVencimento, boleto_value_open: valorAberto });
               }
             } else {
               boletosToInsert.push({
                 timeline_id: timelineId,
                 ixc_boleto_id: ixcBoletoId,
                 boleto_value: valor,
+                boleto_value_open: valorAberto,
                 due_date: dataVencimento,
                 status,
               });
