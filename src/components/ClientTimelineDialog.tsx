@@ -26,6 +26,7 @@ interface Event {
   position: 'top' | 'bottom';
   status: 'created' | 'resolved' | 'no_response';
   time?: string;
+  ixc_alert_line?: string;
 }
 
 interface TimelineLine {
@@ -130,6 +131,7 @@ export const ClientTimelineDialog = ({
               status: e.status as 'created' | 'resolved' | 'no_response',
               time: e.event_time || undefined,
               created_at: e.created_at,
+              ixc_alert_line: e.ixc_alert_line || undefined,
             })),
           };
         })
@@ -245,6 +247,7 @@ export const ClientTimelineDialog = ({
               icon: event.icon,
               icon_size: event.iconSize,
               event_order: index,
+              ixc_alert_line: (event as any).ixc_alert_line || null,
             }));
 
             await supabase

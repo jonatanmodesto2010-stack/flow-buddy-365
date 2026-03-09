@@ -18,6 +18,7 @@ interface Event {
   isNew?: boolean;
   time?: string;
   created_at?: string;
+  ixc_alert_line?: string;
 }
 
 interface TimelineLine {
@@ -135,7 +136,8 @@ export const ClientTimeline = ({ clientId, clientName, onClose }: ClientTimeline
                 description: e.description || '',
                 position: e.position as 'top' | 'bottom',
                 status: e.status as 'created' | 'resolved' | 'no_response',
-                created_at: e.created_at
+                created_at: e.created_at,
+                ixc_alert_line: e.ixc_alert_line
               })),
             };
           })
@@ -259,6 +261,18 @@ export const ClientTimeline = ({ clientId, clientName, onClose }: ClientTimeline
             });
           } else {
             console.log('IXC alert synced:', ixcResult);
+            // Salvar ixc_alert_line no banco para referência futura
+            if (ixcResult?.alert_line) {
+              try {
+                await supabase
+                  .from('timeline_events')
+                  .update({ ixc_alert_line: ixcResult.alert_line } as any)
+                  .eq('line_id', editingLineId)
+                  .eq('description', event.description);
+              } catch (saveErr) {
+                console.warn('Failed to save ixc_alert_line:', saveErr);
+              }
+            }
           }
         }
       } catch (ixcErr) {
@@ -292,8 +306,8 @@ export const ClientTimeline = ({ clientId, clientName, onClose }: ClientTimeline
     setEditingEvent(null);
     setEditingLineId(null);
 
-    // Sync IXC remove - non-blocking
-    if (deletedEvent?.description?.trim() && deletedEvent?.created_at) {
+    // Sync IXC remove - non-blocking, using ixc_alert_line
+    if (deletedEvent?.ixc_alert_line) {
       try {
         const { data: timelineData } = await supabase
           .from('client_timelines')
@@ -306,20 +320,19 @@ export const ClientTimeline = ({ clientId, clientName, onClose }: ClientTimeline
             body: {
               organization_id: timelineData.organization_id,
               ixc_client_id: timelineData.client_id,
-              alert_text: deletedEvent.description,
-              event_created_at: deletedEvent.created_at,
-              action: 'remove',
+              alert_line: deletedEvent.ixc_alert_line,
+              action: 'remove_line',
             },
           });
 
           if (ixcError || ixcResult?.error) {
-            console.warn('IXC alert remove sync failed:', ixcError || ixcResult?.error);
+            console.warn('IXC alert remove_line sync failed:', ixcError || ixcResult?.error);
           } else {
-            console.log('IXC alert remove synced:', ixcResult);
+            console.log('IXC alert remove_line synced:', ixcResult);
           }
         }
       } catch (err) {
-        console.warn('IXC alert remove sync error:', err);
+        console.warn('IXC alert remove_line sync error:', err);
       }
     }
   };
@@ -392,6 +405,7 @@ export const ClientTimeline = ({ clientId, clientName, onClose }: ClientTimeline
         icon: e.icon,
         icon_size: e.iconSize,
         event_order: index,
+        ixc_alert_line: e.ixc_alert_line || null,
       }));
 
       if (eventsToInsert.length > 0) {

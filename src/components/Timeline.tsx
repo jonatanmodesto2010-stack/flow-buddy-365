@@ -19,6 +19,7 @@ interface Event {
   isNew?: boolean;
   time?: string;
   created_at?: string;
+  ixc_alert_line?: string;
 }
 
 interface ClientInfo {
@@ -209,6 +210,17 @@ export const Timeline = ({
 
         if (ixcError || ixcResult?.error) {
           console.warn('IXC alert sync failed:', ixcError || ixcResult?.error);
+        } else if (ixcResult?.alert_line) {
+          // Salvar ixc_alert_line no banco para referência futura na exclusão
+          try {
+            await supabase
+              .from('timeline_events')
+              .update({ ixc_alert_line: ixcResult.alert_line } as any)
+              .eq('line_id', editingLineId)
+              .eq('description', updatedEvent.description);
+          } catch (saveErr) {
+            console.warn('Failed to save ixc_alert_line:', saveErr);
+          }
         }
       } catch (ixcErr) {
         console.warn('IXC alert sync error:', ixcErr);
@@ -246,21 +258,8 @@ export const Timeline = ({
         setEditingEvent(null);
         setEditingLineId(null);
         // Sync IXC remove after local update
-        if (deletedEvent?.description?.trim() && deletedEvent?.created_at && timeline.clientInfo.clientId && timeline.organization_id) {
-          try {
-            await supabase.functions.invoke('ixc-update-alert', {
-              body: {
-                organization_id: timeline.organization_id,
-                ixc_client_id: timeline.clientInfo.clientId,
-                alert_text: deletedEvent.description,
-                event_created_at: deletedEvent.created_at,
-                action: 'remove',
-              },
-            });
-          } catch (err) {
-            console.warn('IXC alert remove sync error:', err);
-          }
-        }
+        // IXC sync non-blocking (captura antes, remove depois)
+        syncIxcRemove();
         return;
       }
       
@@ -276,22 +275,7 @@ export const Timeline = ({
         
         setEditingEvent(null);
         setEditingLineId(null);
-        // Sync IXC remove after local update
-        if (deletedEvent?.description?.trim() && deletedEvent?.created_at && timeline.clientInfo.clientId && timeline.organization_id) {
-          try {
-            await supabase.functions.invoke('ixc-update-alert', {
-              body: {
-                organization_id: timeline.organization_id,
-                ixc_client_id: timeline.clientInfo.clientId,
-                alert_text: deletedEvent.description,
-                event_created_at: deletedEvent.created_at,
-                action: 'remove',
-              },
-            });
-          } catch (err) {
-            console.warn('IXC alert remove sync error:', err);
-          }
-        }
+        syncIxcRemove();
         return;
       }
     }
@@ -300,21 +284,22 @@ export const Timeline = ({
     updateLine(editingLineId, updatedEvents);
     setEditingEvent(null);
     setEditingLineId(null);
+    syncIxcRemove();
 
-    // Sync IXC remove after local update
-    if (deletedEvent?.description?.trim() && deletedEvent?.created_at && timeline.clientInfo.clientId && timeline.organization_id) {
+    // Helper function for non-blocking IXC remove
+    async function syncIxcRemove() {
+      if (!deletedEvent?.ixc_alert_line || !timeline.clientInfo.clientId || !timeline.organization_id) return;
       try {
         await supabase.functions.invoke('ixc-update-alert', {
           body: {
             organization_id: timeline.organization_id,
             ixc_client_id: timeline.clientInfo.clientId,
-            alert_text: deletedEvent.description,
-            event_created_at: deletedEvent.created_at,
-            action: 'remove',
+            alert_line: deletedEvent.ixc_alert_line,
+            action: 'remove_line',
           },
         });
       } catch (err) {
-        console.warn('IXC alert remove sync error:', err);
+        console.warn('IXC alert remove_line sync error:', err);
       }
     }
   };

@@ -1,0 +1,1 @@
+ALTER TABLE public.timeline_events ADD COLUMN ixc_alert_line text;
