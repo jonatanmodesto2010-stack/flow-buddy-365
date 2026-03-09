@@ -233,23 +233,38 @@ export const IntegrationsSettings = () => {
       return;
     }
     try {
-      // Fire and forget - the edge function will create the sync log
-      const response = supabase.functions.invoke('ixc-sync', {
+      // Start the sync - await the response to catch 409 conflicts
+      const result = await supabase.functions.invoke('ixc-sync', {
         body: { action: syncAction, organization_id: organizationId },
       });
 
-      // Wait a moment then start polling for the new sync log
-      setTimeout(async () => {
-        // Check if the function returned a 409 conflict
-        const result = await response;
-        if (result.error) {
-          const errorBody = result.error?.message || '';
-          if (errorBody.includes('409') || errorBody.includes('em andamento')) {
-            toast({ title: 'Sincronização já em andamento', description: 'Aguarde a conclusão da sincronização atual.', variant: 'destructive' });
-            return;
+      if (result.error) {
+        const errorMsg = result.error?.message || '';
+        // Check if it's a conflict (409) - sync already running
+        if (errorMsg.includes('409') || errorMsg.includes('em andamento')) {
+          toast({ title: 'Sincronização já em andamento', description: 'Aguarde a conclusão da sincronização atual.', variant: 'destructive' });
+          // Still try to pick up the running sync for progress tracking
+          const { data } = await supabase
+            .from('integration_sync_log')
+            .select('*')
+            .eq('organization_id', organizationId!)
+            .eq('status', 'running')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (data) {
+            setSyncProgress(data as SyncProgress);
+            startPolling(data.id);
           }
+          return;
         }
+        // Other errors
+        toast({ title: 'Erro ao iniciar sincronização', description: errorMsg, variant: 'destructive' });
+        return;
+      }
 
+      // Success - poll for the new sync log after a short delay
+      setTimeout(async () => {
         const { data } = await supabase
           .from('integration_sync_log')
           .select('*')
@@ -262,7 +277,7 @@ export const IntegrationsSettings = () => {
           setSyncProgress(data as SyncProgress);
           startPolling(data.id);
         }
-      }, 1500);
+      }, 500);
     } catch (err: any) {
       toast({ title: 'Erro ao iniciar sincronização', description: err.message, variant: 'destructive' });
     }
