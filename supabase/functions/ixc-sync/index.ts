@@ -6,10 +6,36 @@ const corsHeaders = {
 };
 
 function encodeIxcToken(rawToken: string): string {
+  // Debug: log the token format (without exposing the actual token)
+  console.log(`[DEBUG] Token format - length: ${rawToken.length}, has colon: ${rawToken.includes(':')}`);
+  
   if (rawToken.includes(':')) {
     return btoa(rawToken);
   }
   return btoa(`${rawToken}:`);
+}
+
+// Try different authentication formats
+function getAlternativeTokenFormats(rawToken: string): string[] {
+  const formats = [];
+  
+  // Format 1: token: (current)
+  formats.push(btoa(`${rawToken}:`));
+  
+  // Format 2: token (without colon)
+  formats.push(btoa(rawToken));
+  
+  // Format 3: Raw token (not base64 encoded)
+  formats.push(rawToken);
+  
+  // Format 4: Common username:password format if token looks like it might be a password
+  if (rawToken.length === 64) {
+    formats.push(btoa(`admin:${rawToken}`));
+    formats.push(btoa(`root:${rawToken}`));
+    formats.push(btoa(`user:${rawToken}`));
+  }
+  
+  return formats;
 }
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -27,18 +53,27 @@ async function ixcRequest(apiUrl: string, encodedToken: string, endpoint: string
     ...extraBody,
   };
 
+  console.log(`[DEBUG] Making request to: ${url}`);
+  console.log(`[DEBUG] Request body:`, JSON.stringify(body, null, 2));
+  console.log(`[DEBUG] Auth header present: ${!!encodedToken}`);
+
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Basic ${encodedToken}`,
       'ixcsoft': 'listar',
+      'User-Agent': 'Lovable-IXC-Sync/1.0',
     },
     body: JSON.stringify(body),
   });
 
+  console.log(`[DEBUG] Response status: ${res.status}`);
+  console.log(`[DEBUG] Response headers:`, Object.fromEntries(res.headers.entries()));
+
   if (!res.ok) {
     const text = await res.text();
+    console.error(`[ERROR] IXC API failed - Status: ${res.status}, Response: ${text.substring(0, 500)}`);
     throw new Error(`IXC API error ${res.status}: ${text}`);
   }
 
@@ -149,7 +184,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
-    // Test connection
+    // Test connection with multiple authentication formats
     if (action === 'test') {
       const { api_url, api_token } = body;
       if (!api_url || !api_token) {
@@ -157,14 +192,67 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      const token = encodeIxcToken(api_token);
-      const { total } = await ixcRequest(api_url, token, 'cliente', 1, 1);
-      const { total: activeTotal } = await ixcRequest(api_url, token, 'cliente', 1, 1, {
-        qtype: 'ativo',
-        query: 'S',
-        oper: '=',
-      });
-      return new Response(JSON.stringify({ success: true, total_clients: total, active_clients: activeTotal }), {
+
+      console.log(`[TEST] Testing connection to: ${api_url}`);
+      console.log(`[TEST] Token provided: ${api_token ? 'Yes' : 'No'} (length: ${api_token?.length || 0})`);
+
+      // Try different authentication formats
+      const tokenFormats = getAlternativeTokenFormats(api_token);
+      console.log(`[TEST] Will try ${tokenFormats.length} different auth formats`);
+
+      let lastError = null;
+
+      for (let i = 0; i < tokenFormats.length; i++) {
+        const format = tokenFormats[i];
+        console.log(`[TEST] Trying format ${i + 1}/${tokenFormats.length}...`);
+
+        try {
+          const { total } = await ixcRequest(api_url, format, 'cliente', 1, 1);
+          console.log(`[TEST] SUCCESS with format ${i + 1}! Found ${total} total clients`);
+
+          const { total: activeTotal } = await ixcRequest(api_url, format, 'cliente', 1, 1, {
+            qtype: 'ativo',
+            query: 'S',
+            oper: '=',
+          });
+
+          return new Response(JSON.stringify({ 
+            success: true, 
+            total_clients: total, 
+            active_clients: activeTotal,
+            auth_format_used: i + 1,
+            message: `Conexão testada com sucesso (formato de autenticação ${i + 1})` 
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+
+        } catch (error: any) {
+          console.log(`[TEST] Format ${i + 1} failed: ${error.message.substring(0, 100)}`);
+          lastError = error;
+          
+          // If not a 401 error, break (it's probably a different issue)
+          if (!error.message.includes('401')) {
+            break;
+          }
+        }
+      }
+
+      // All formats failed
+      console.error(`[TEST] All authentication formats failed. Last error:`, lastError?.message);
+      
+      return new Response(JSON.stringify({ 
+        error: 'Falha na autenticação com todos os formatos testados',
+        details: 'Token pode estar incorreto, expirado ou servidor pode ter restrições de IP',
+        formats_tested: tokenFormats.length,
+        last_error: lastError?.message || 'Erro desconhecido',
+        suggestions: [
+          'Verifique se o token está correto e ativo no painel do IXC',
+          'Confirme se a URL da API está correta',
+          'Verifique se há restrições de IP no servidor IXC',
+          'Contate o suporte do IXC para verificar o formato correto da API'
+        ]
+      }), {
+        status: 401, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
