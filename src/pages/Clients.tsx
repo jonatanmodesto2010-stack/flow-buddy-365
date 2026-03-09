@@ -402,10 +402,7 @@ const Clients = () => {
                     <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Última página">
                       <ChevronsRight size={16} />
                     </button>
-                    <span className="text-sm text-muted-foreground ml-2">
-                      {totalCount > 0 ? `${startIndex + 1} - ${endIndex} / ${totalCount}` : '0 clientes'}
-                    </span>
-                  </div>
+                   </div>
 
                   <div className="flex items-center gap-3">
                     <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
