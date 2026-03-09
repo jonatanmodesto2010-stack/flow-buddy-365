@@ -292,6 +292,31 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify(results), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    // Inspect fn_areceber fields
+    if (action === 'inspect_areceber') {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supa = createClient(supabaseUrl, supabaseKey);
+      const org_id = body.organization_id;
+      const { data: int } = await supa.from('organization_integrations').select('api_url, api_token').eq('organization_id', org_id).eq('integration_type', 'ixc').single();
+      if (!int) return new Response(JSON.stringify({ error: 'No integration found' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      const token = encodeIxcToken(int.api_token);
+
+      try {
+        const { registros, total } = await ixcRequest(int.api_url, token, 'fn_areceber', 1, 5);
+        // Return all fields from the first few records
+        return new Response(JSON.stringify({
+          endpoint: 'fn_areceber',
+          total_records: total,
+          sample_count: registros.length,
+          fields: registros.length > 0 ? Object.keys(registros[0]) : [],
+          sample_records: registros.slice(0, 3),
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
     // Full sync or boleto sync
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
