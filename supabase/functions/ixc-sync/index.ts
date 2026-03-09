@@ -800,8 +800,9 @@ Deno.serve(async (req) => {
 
           for (const item of aReceber) {
             const clientId = String(item.id_cliente);
-            const valor = parseFloat(item.valor || '0');
-            debtPerClient.set(clientId, (debtPerClient.get(clientId) || 0) + valor);
+            // Usar valor_aberto (saldo em aberto real) ao invés de valor (valor total do boleto)
+            const valorAberto = parseFloat(item.valor_aberto || item.valor || '0');
+            debtPerClient.set(clientId, (debtPerClient.get(clientId) || 0) + valorAberto);
 
             if (!knownClientIds.has(clientId)) {
               newClientIds.add(clientId);
