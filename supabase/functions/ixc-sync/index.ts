@@ -854,7 +854,7 @@ Deno.serve(async (req) => {
           console.log(`[sync_boletos] Loaded ${existingBoletos.size} existing boletos from DB`);
 
           const boletosToInsert: any[] = [];
-          const boletosToUpdate: { id: string; status: string; boleto_value: number; due_date: string }[] = [];
+          const boletosToUpdate: { id: string; status: string; boleto_value: number; due_date: string; boleto_value_open: number }[] = [];
 
           for (const boleto of boletos) {
             const clientId = String(boleto.id_cliente);
@@ -863,6 +863,7 @@ Deno.serve(async (req) => {
 
             const ixcBoletoId = String(boleto.id);
             const valor = parseFloat(boleto.valor || '0');
+            const valorAberto = parseFloat(boleto.valor_aberto || '0');
             const dataVencimento = boleto.data_vencimento || '';
 
             let status = 'pendente';
@@ -875,13 +876,14 @@ Deno.serve(async (req) => {
             const existing = existingBoletos.get(ixcBoletoId);
             if (existing) {
               if (existing.status !== status || Number(existing.boleto_value) !== valor || existing.due_date !== dataVencimento) {
-                boletosToUpdate.push({ id: existing.id, status, boleto_value: valor, due_date: dataVencimento });
+                boletosToUpdate.push({ id: existing.id, status, boleto_value: valor, due_date: dataVencimento, boleto_value_open: valorAberto });
               }
             } else {
               boletosToInsert.push({
                 timeline_id: timelineId,
                 ixc_boleto_id: ixcBoletoId,
                 boleto_value: valor,
+                boleto_value_open: valorAberto,
                 due_date: dataVencimento,
                 status,
               });
@@ -929,6 +931,7 @@ Deno.serve(async (req) => {
                 p_values: chunk.map(b => b.boleto_value),
                 p_dates: chunk.map(b => b.due_date),
                 p_statuses: chunk.map(b => b.status),
+                p_values_open: chunk.map(b => b.boleto_value_open),
               });
               if (error) orgResult.errors.push(`Boleto update error: ${error.message}`);
             }

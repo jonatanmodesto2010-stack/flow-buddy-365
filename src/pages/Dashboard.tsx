@@ -20,6 +20,7 @@ interface BoletoData {
   due_date: string;
   status: string;
   boleto_value: number;
+  boleto_value_open: number | null;
 }
 
 const Dashboard = () => {
@@ -54,7 +55,7 @@ const Dashboard = () => {
 
       const timelineIds = (data || []).map((t: any) => t.id);
       if (timelineIds.length > 0) {
-        const boletosData = await fetchInChunks('client_boletos', 'timeline_id', timelineIds, 'timeline_id, due_date, status, boleto_value');
+        const boletosData = await fetchInChunks('client_boletos', 'timeline_id', timelineIds, 'timeline_id, due_date, status, boleto_value, boleto_value_open');
         setBoletos(boletosData || []);
       }
     } catch (err) {
@@ -66,6 +67,8 @@ const Dashboard = () => {
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+  const getOpenValue = (b: BoletoData) => Number(b.boleto_value_open ?? b.boleto_value) || 0;
 
   // Extract unique filiais
   const filiais = useMemo(() => {
@@ -113,7 +116,7 @@ const Dashboard = () => {
     today.setHours(0, 0, 0, 0);
 
     // Boleto calculations
-    const pendingBoletos = filteredBoletos.filter(b => b.status !== 'pago' && b.status !== 'cancelado');
+    const pendingBoletos = filteredBoletos.filter(b => b.status !== 'pago' && b.status !== 'cancelado' && getOpenValue(b) > 0);
     const overdueBoletos = pendingBoletos.filter(b => {
       const d = new Date(b.due_date); d.setHours(0, 0, 0, 0);
       return today.getTime() > d.getTime();
@@ -123,8 +126,8 @@ const Dashboard = () => {
       return today.getTime() <= d.getTime();
     });
 
-    const totalOverdueValue = overdueBoletos.reduce((s, b) => s + (Number(b.boleto_value) || 0), 0);
-    const totalUpcomingValue = upcomingBoletos.reduce((s, b) => s + (Number(b.boleto_value) || 0), 0);
+    const totalOverdueValue = overdueBoletos.reduce((s, b) => s + getOpenValue(b), 0);
+    const totalUpcomingValue = upcomingBoletos.reduce((s, b) => s + getOpenValue(b), 0);
     const totalReceivable = totalOverdueValue + totalUpcomingValue;
     const paidBoletos = filteredBoletos.filter(b => b.status === 'pago');
     const totalPaidValue = paidBoletos.reduce((s, b) => s + (Number(b.boleto_value) || 0), 0);
@@ -139,7 +142,7 @@ const Dashboard = () => {
     for (const b of overdueBoletos) {
       const d = new Date(b.due_date); d.setHours(0, 0, 0, 0);
       const days = Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-      const val = Number(b.boleto_value) || 0;
+      const val = getOpenValue(b);
       if (days <= 30) { aging['1-30'] += val; agingCount['1-30']++; }
       else if (days <= 60) { aging['31-60'] += val; agingCount['31-60']++; }
       else if (days <= 90) { aging['61-90'] += val; agingCount['61-90']++; }

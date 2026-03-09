@@ -11,6 +11,7 @@ interface BoletoData {
   due_date: string;
   status: string;
   boleto_value: number;
+  boleto_value_open: number | null;
 }
 
 interface EventData {
@@ -67,8 +68,8 @@ export const ClientPriorityList = ({ timelines, boletos }: ClientPriorityListPro
         return today.getTime() > d.getTime();
       });
 
-      const overdueValue = overdue.reduce((s, b) => s + (Number(b.boleto_value) || 0), 0);
-      const totalPending = pending.reduce((s, b) => s + (Number(b.boleto_value) || 0), 0);
+      const overdueValue = overdue.reduce((s, b) => s + (Number(b.boleto_value_open ?? b.boleto_value) || 0), 0);
+      const totalPending = pending.reduce((s, b) => s + (Number(b.boleto_value_open ?? b.boleto_value) || 0), 0);
 
       let maxOverdueDays = 0;
       for (const b of overdue) {
