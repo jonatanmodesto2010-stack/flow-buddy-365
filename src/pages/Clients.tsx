@@ -517,12 +517,13 @@ const Clients = () => {
               </div>
             </div>
 
-            {/* Right Column - Widgets */}
-            <div className="hidden lg:block w-[380px] flex-shrink-0 space-y-4">
-              <CalendarWidget
-              organizationId={organizationId}
-              onClientClick={(name) => setSearchTerm(name)} />
-            
+            {/* Right Column - Calendar (65%) */}
+            <div className="hidden lg:block flex-1 min-w-0">
+              <CalendarView
+                onClientClick={(name) => setSearchTerm(name)}
+                hideTitle
+                hideStats
+              />
             </div>
           </div>
         </div>
