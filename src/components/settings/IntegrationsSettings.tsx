@@ -72,6 +72,7 @@ export const IntegrationsSettings = () => {
         setApiUrl(data.api_url || '');
         setApiToken(data.api_token || '');
         setApiUrlContracts(data.api_url_contracts || '');
+        setOsRetiradaAssuntoId(data.ixc_os_retirada_assunto_id || '');
         setIsActive(data.is_active);
       }
     } catch (err: any) {
