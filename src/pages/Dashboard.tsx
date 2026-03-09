@@ -11,7 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { ClientPriorityList } from '@/components/ClientPriorityList';
 import { CollectionActionsWidget } from '@/components/CollectionActionsWidget';
 import { AgreementsOverdueWidget } from '@/components/AgreementsOverdueWidget';
-import { EquipmentRetrievalWidget } from '@/components/EquipmentRetrievalWidget';
+
 import { DelinquentsExport } from '@/components/DelinquentsExport';
 import { DashboardDateFilter, type DateRange } from '@/components/DashboardDateFilter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -402,7 +402,7 @@ const Dashboard = () => {
                 </div>
 
                 <CollectionActionsWidget />
-                <EquipmentRetrievalWidget />
+                
                 <AgreementsOverdueWidget />
                 <ClientPriorityList timelines={filteredTimelines} boletos={filteredBoletos} />
               </>
