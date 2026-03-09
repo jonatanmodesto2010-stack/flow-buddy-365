@@ -620,13 +620,25 @@ Deno.serve(async (req) => {
           const boletos = await fetchAllIxcRecordsWithProgress(api_url, token, 'fn_areceber', supabase, syncId, {}, currentOffset);
           console.log(`[sync] Fetched ${boletos.length} boletos in ${((Date.now() - boletoStart) / 1000).toFixed(1)}s`);
 
-          const { data: timelines } = await supabase
-            .from('client_timelines')
-            .select('id, client_id')
-            .eq('organization_id', organization_id);
+          // Get ALL timelines with pagination to bypass 1000-row limit
+          const allTimelines: any[] = [];
+          let timelineFrom = 0;
+          const TIMELINE_PAGE = 1000;
+          while (true) {
+            const { data: page } = await supabase
+              .from('client_timelines')
+              .select('id, client_id')
+              .eq('organization_id', organization_id)
+              .range(timelineFrom, timelineFrom + TIMELINE_PAGE - 1);
+            if (!page || page.length === 0) break;
+            allTimelines.push(...page);
+            if (page.length < TIMELINE_PAGE) break;
+            timelineFrom += TIMELINE_PAGE;
+          }
+          console.log(`[sync_boletos] Loaded ${allTimelines.length} timelines for boleto mapping`);
 
           const clientToTimeline = new Map<string, string>();
-          for (const t of (timelines || [])) {
+          for (const t of allTimelines) {
             if (t.client_id) clientToTimeline.set(t.client_id, t.id);
           }
 
