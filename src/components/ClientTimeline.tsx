@@ -136,7 +136,8 @@ export const ClientTimeline = ({ clientId, clientName, onClose }: ClientTimeline
                 description: e.description || '',
                 position: e.position as 'top' | 'bottom',
                 status: e.status as 'created' | 'resolved' | 'no_response',
-                created_at: e.created_at
+                created_at: e.created_at,
+                ixc_alert_line: e.ixc_alert_line
               })),
             };
           })
