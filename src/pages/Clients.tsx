@@ -356,6 +356,9 @@ const Clients = () => {
               <div className="animate-fade-in">
                 <div className="flex items-center gap-4 mb-6">
                   <h2 className="text-2xl font-bold text-foreground">Clientes</h2>
+                  <span className="text-sm text-muted-foreground">
+                    {totalCount > 0 ? `${startIndex + 1} - ${endIndex} / ${totalCount}` : '0 clientes'}
+                  </span>
                   {filiais.length > 0 &&
                 <Select value={filialFilter} onValueChange={setFilialFilter}>
                       <SelectTrigger className="w-[220px] h-9">
