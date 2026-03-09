@@ -542,7 +542,7 @@ export const Timeline = ({
 
                 {/* Elementos ao redor do status */}
                 {event.status === 'no_response' ? (
-                  // Elementos à ESQUERDA do status: Descrição → Data → Ícone
+                  // Elementos à ESQUERDA do status: Descrição → Data → Plataforma → Ícone
                   <div className="absolute flex flex-row-reverse items-center gap-3 top-1/2 -translate-y-1/2 right-[calc(50%+30px)]">
                     <div
                       className="text-2xl cursor-pointer hover:scale-105 transition-transform"
@@ -554,8 +554,19 @@ export const Timeline = ({
                     >
                       {event.icon}
                     </div>
-                    <div className="text-xs font-semibold text-foreground whitespace-nowrap">
-                      {event.date}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-foreground whitespace-nowrap">
+                        {event.date}
+                      </span>
+                      {event.time && (
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          event.time === 'OPA' 
+                            ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400' 
+                            : 'bg-purple-500/20 text-purple-600 dark:text-purple-400'
+                        }`}>
+                          {event.time}
+                        </span>
+                      )}
                     </div>
                     {showAllDescriptions && event.description && (
                       <motion.div
@@ -571,7 +582,7 @@ export const Timeline = ({
                     )}
                   </div>
                 ) : (
-                  // Elementos à DIREITA do status: Ícone → Data → Descrição
+                  // Elementos à DIREITA do status: Ícone → Data → Plataforma → Descrição
                   <div className="absolute flex flex-row items-center gap-3 top-1/2 -translate-y-1/2 left-[calc(50%+30px)]">
                     <div
                       className="text-2xl cursor-pointer hover:scale-105 transition-transform"
@@ -583,8 +594,19 @@ export const Timeline = ({
                     >
                       {event.icon}
                     </div>
-                    <div className="text-xs font-semibold text-foreground whitespace-nowrap">
-                      {event.date}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-foreground whitespace-nowrap">
+                        {event.date}
+                      </span>
+                      {event.time && (
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          event.time === 'OPA' 
+                            ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400' 
+                            : 'bg-purple-500/20 text-purple-600 dark:text-purple-400'
+                        }`}>
+                          {event.time}
+                        </span>
+                      )}
                     </div>
                     {showAllDescriptions && event.description && (
                       <motion.div
@@ -635,8 +657,19 @@ export const Timeline = ({
                           >
                             {event.position === 'bottom' ? (
                               <>
-                                <div className="text-xs font-semibold text-foreground mb-2 whitespace-nowrap">
-                                  {event.date}
+                                <div className="flex items-center gap-1.5 mb-2">
+                                  <span className="text-xs font-semibold text-foreground whitespace-nowrap">
+                                    {event.date}
+                                  </span>
+                                  {event.time && (
+                                    <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${
+                                      event.time === 'OPA' 
+                                        ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400' 
+                                        : 'bg-purple-500/20 text-purple-600 dark:text-purple-400'
+                                    }`}>
+                                      {event.time}
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="leading-none flex items-center justify-center">
                                   <span className="text-2xl">{event.icon}</span>
@@ -647,8 +680,19 @@ export const Timeline = ({
                                 <div className="mb-2 leading-none flex items-center justify-center">
                                   <span className="text-2xl">{event.icon}</span>
                                 </div>
-                                <div className="text-xs font-semibold text-foreground whitespace-nowrap">
-                                  {event.date}
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-semibold text-foreground whitespace-nowrap">
+                                    {event.date}
+                                  </span>
+                                  {event.time && (
+                                    <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${
+                                      event.time === 'OPA' 
+                                        ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400' 
+                                        : 'bg-purple-500/20 text-purple-600 dark:text-purple-400'
+                                    }`}>
+                                      {event.time}
+                                    </span>
+                                  )}
                                 </div>
                               </>
                             )}
