@@ -34,7 +34,7 @@ export const useOrganizationFilters = (pageName: string) => {
   const [filters, setFilters] = useState<FilterValues>(DEFAULT_FILTERS);
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Obter userId do usuário autenticado
   useEffect(() => {
