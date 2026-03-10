@@ -237,8 +237,19 @@ export const IntegrationsSettings = () => {
         body: { action: syncAction, organization_id: organizationId },
       });
 
-      // Parse response data - may be Blob, string, or already parsed
+      // Parse response data - try result.data first, then error.context (Response object)
       let responseData = result.data;
+      
+      // When edge function returns non-2xx, supabase-js may put body in error.context
+      if (result.error && (!responseData || (responseData instanceof Blob && responseData.size === 0))) {
+        const errAny = result.error as any;
+        if (errAny.context && typeof errAny.context.json === 'function') {
+          try {
+            responseData = await errAny.context.json();
+          } catch { /* ignore */ }
+        }
+      }
+      
       if (responseData instanceof Blob) {
         try {
           const text = await responseData.text();
