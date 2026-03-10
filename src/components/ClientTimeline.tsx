@@ -40,7 +40,7 @@ export const ClientTimeline = ({ clientId, clientName, onClose }: ClientTimeline
   const [showAllDescriptions, setShowAllDescriptions] = useState(false);
   const [isVertical, setIsVertical] = useState(false);
   const [isLocalUpdate, setIsLocalUpdate] = useState(false);
-  const reloadTimeoutRef = useRef<NodeJS.Timeout>();
+  const reloadTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const { toast } = useToast();
   
   const toggleAllDescriptions = () => {
