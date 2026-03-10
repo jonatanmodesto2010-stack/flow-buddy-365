@@ -237,13 +237,23 @@ export const IntegrationsSettings = () => {
         body: { action: syncAction, organization_id: organizationId },
       });
 
+      // Parse response data - may be Blob, string, or already parsed
+      let responseData = result.data;
+      if (responseData instanceof Blob) {
+        try {
+          const text = await responseData.text();
+          responseData = JSON.parse(text);
+        } catch { /* ignore parse errors */ }
+      } else if (typeof responseData === 'string') {
+        try { responseData = JSON.parse(responseData); } catch { /* ignore */ }
+      }
+
       // Log for debugging
-      console.log('[startSync]', { action: syncAction, error: result.error?.message, data: result.data });
+      console.log('[startSync]', { action: syncAction, error: result.error?.message, responseData });
 
       if (result.error) {
-        const responseData = result.data;
         const is409 = responseData?.running_sync_id || 
-                       responseData?.error?.includes('em andamento') ||
+                       (typeof responseData?.error === 'string' && responseData.error.includes('em andamento')) ||
                        result.error.message?.includes('em andamento');
         
         if (is409) {
@@ -260,11 +270,25 @@ export const IntegrationsSettings = () => {
               setSyncProgress(data as SyncProgress);
               startPolling(data.id);
             }
+          } else {
+            // Fallback: find running sync by org
+            const { data } = await supabase
+              .from('integration_sync_log')
+              .select('*')
+              .eq('organization_id', organizationId!)
+              .eq('status', 'running')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (data) {
+              setSyncProgress(data as SyncProgress);
+              startPolling(data.id);
+            }
           }
           return;
         }
         // Other errors → destructive toast
-        toast({ title: 'Erro ao iniciar sincronização', description: result.error.message, variant: 'destructive' });
+        toast({ title: 'Erro ao iniciar sincronização', description: responseData?.error || result.error.message, variant: 'destructive' });
         return;
       }
 
