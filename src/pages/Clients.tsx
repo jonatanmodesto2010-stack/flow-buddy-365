@@ -64,6 +64,31 @@ const Clients = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+  // Realtime subscription for timeline_events changes
+  useEffect(() => {
+    if (!organizationId || clients.length === 0) return;
+
+    const channel = supabase
+      .channel('timeline-events-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'timeline_events',
+        },
+        () => {
+          // Refresh latest events when any timeline event changes
+          loadLatestEvents(clients);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [organizationId, clients]);
+
   // Load filiais once
   useEffect(() => {
     if (!organizationId) return;
