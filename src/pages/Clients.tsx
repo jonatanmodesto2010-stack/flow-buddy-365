@@ -151,6 +151,7 @@ const Clients = () => {
       // Load overdue days in background for visible clients only
       if (data && data.length > 0) {
         loadOverdueDays(data);
+        loadLatestEvents(data);
         // Load online status for blocked clients
         const blockedClients = data.filter((c) => !c.is_active && c.status !== 'archived' && c.status !== 'completed');
         if (blockedClients.length > 0) {
