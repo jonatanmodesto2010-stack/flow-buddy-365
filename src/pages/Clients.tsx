@@ -26,6 +26,7 @@ const Clients = () => {
   const [clients, setClients] = useState<ClientTimeline[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [overdueDaysMap, setOverdueDaysMap] = useState<Map<string, number>>(new Map());
+  const [latestEventsMap, setLatestEventsMap] = useState<Map<string, { icon: string; event_date: string; description: string }>>(new Map());
   const [onlineClients, setOnlineClients] = useState<Set<string>>(new Set());
   const [onlineLoading, setOnlineLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
