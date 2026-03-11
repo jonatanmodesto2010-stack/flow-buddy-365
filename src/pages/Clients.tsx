@@ -228,6 +228,32 @@ const Clients = () => {
       setOnlineLoading(false);
     }
   };
+  const loadLatestEvents = async (timelines: ClientTimeline[]) => {
+    try {
+      const timelineIds = timelines.map((t) => t.id);
+      const { data, error } = await (supabaseClient as any)
+        .from('latest_client_events')
+        .select('timeline_id, icon, event_date, description')
+        .in('timeline_id', timelineIds);
+
+      if (error) {
+        console.error('Error loading latest events:', error);
+        return;
+      }
+
+      const map = new Map<string, { icon: string; event_date: string; description: string }>();
+      for (const evt of data || []) {
+        map.set(evt.timeline_id, {
+          icon: evt.icon || '',
+          event_date: evt.event_date || '',
+          description: evt.description || '',
+        });
+      }
+      setLatestEventsMap(map);
+    } catch (err) {
+      console.error('Error loading latest events:', err);
+    }
+  };
 
 
   useEffect(() => {
