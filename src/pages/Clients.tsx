@@ -161,6 +161,7 @@ const Clients = () => {
         }
       } else {
         setOverdueDaysMap(new Map());
+        setLatestEventsMap(new Map());
         setOnlineClients(new Set());
       }
     } catch (error: any) {
