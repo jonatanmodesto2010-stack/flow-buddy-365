@@ -265,8 +265,18 @@ const Clients = () => {
     }
   };
   const loadLatestEvents = async (timelines: ClientTimeline[]) => {
+    const requestId = ++latestEventsRequestIdRef.current;
+
     try {
       const timelineIds = timelines.map((t) => t.id);
+
+      if (timelineIds.length === 0) {
+        if (requestId === latestEventsRequestIdRef.current) {
+          setLatestEventsMap(new Map());
+        }
+        return;
+      }
+
       const { data, error } = await (supabaseClient as any)
         .from('latest_client_events')
         .select('timeline_id, icon, event_date, description')
@@ -276,6 +286,8 @@ const Clients = () => {
         console.error('Error loading latest events:', error);
         return;
       }
+
+      if (requestId !== latestEventsRequestIdRef.current) return;
 
       const map = new Map<string, { icon: string; event_date: string; description: string }>();
       for (const evt of data || []) {
