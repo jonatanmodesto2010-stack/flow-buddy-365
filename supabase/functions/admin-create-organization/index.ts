@@ -165,6 +165,35 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "reset_user_password") {
+      const { email, new_password } = body;
+      if (!email || !new_password) {
+        return new Response(JSON.stringify({ error: "Missing email or new_password" }), { status: 400, headers: corsHeaders });
+      }
+
+      const { data: users, error: listError } = await adminClient.auth.admin.listUsers();
+      if (listError) {
+        return new Response(JSON.stringify({ error: listError.message }), { status: 500, headers: corsHeaders });
+      }
+
+      const targetUser = users.users.find((u: any) => u.email === email);
+      if (!targetUser) {
+        return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers: corsHeaders });
+      }
+
+      const { error: updateError } = await adminClient.auth.admin.updateUserById(targetUser.id, {
+        password: new_password,
+      });
+
+      if (updateError) {
+        return new Response(JSON.stringify({ error: updateError.message }), { status: 500, headers: corsHeaders });
+      }
+
+      return new Response(JSON.stringify({ success: true, message: "Password updated" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ error: "Unknown action" }), { status: 400, headers: corsHeaders });
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
