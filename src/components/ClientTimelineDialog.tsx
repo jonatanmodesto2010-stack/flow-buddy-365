@@ -53,12 +53,14 @@ interface ClientTimelineDialogProps {
   client: Client;
   isOpen: boolean;
   onClose: () => void;
+  onTimelineUpdated?: () => void;
 }
 
 export const ClientTimelineDialog = ({
   client,
   isOpen,
   onClose,
+  onTimelineUpdated,
 }: ClientTimelineDialogProps) => {
   const [timelineData, setTimelineData] = useState<TimelineData | null>(null);
   const [loading, setLoading] = useState(true);
