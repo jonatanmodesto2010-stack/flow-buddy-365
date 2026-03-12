@@ -69,19 +69,29 @@ const Clients = () => {
   useEffect(() => {
     if (!organizationId || clients.length === 0) return;
 
+    const refreshLatestEvents = () => {
+      void loadLatestEvents(clients);
+    };
+
     const channel = supabase
       .channel('timeline-events-realtime')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'timeline_events',
         },
-        () => {
-          // Refresh latest events when any timeline event changes
-          loadLatestEvents(clients);
-        }
+        refreshLatestEvents
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'timeline_events',
+        },
+        refreshLatestEvents
       )
       .subscribe();
 
