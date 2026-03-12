@@ -700,7 +700,10 @@ const Clients = () => {
           setShowClientTimelineDialog(false);
           setClientForTimeline(null);
           // Refresh latest events after closing timeline dialog
-          if (clients.length > 0) loadLatestEvents(clients);
+          if (clients.length > 0) void loadLatestEvents(clients);
+        }}
+        onTimelineUpdated={() => {
+          if (clients.length > 0) void loadLatestEvents(clients);
         }} />
 
       }
