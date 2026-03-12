@@ -1,0 +1,1 @@
+ALTER VIEW public.latest_client_events SET (security_invoker = true);
