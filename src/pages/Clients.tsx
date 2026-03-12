@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, History, TrendingUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw, Building2, Wifi, WifiOff, ArrowDownUp } from 'lucide-react';
 import { AppLayout } from '@/components/AppLayout';
@@ -27,6 +27,7 @@ const Clients = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [overdueDaysMap, setOverdueDaysMap] = useState<Map<string, number>>(new Map());
   const [latestEventsMap, setLatestEventsMap] = useState<Map<string, { icon: string; event_date: string; description: string }>>(new Map());
+  const latestEventsRequestIdRef = useRef(0);
   const [onlineClients, setOnlineClients] = useState<Set<string>>(new Set());
   const [onlineLoading, setOnlineLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -68,19 +69,29 @@ const Clients = () => {
   useEffect(() => {
     if (!organizationId || clients.length === 0) return;
 
+    const refreshLatestEvents = () => {
+      void loadLatestEvents(clients);
+    };
+
     const channel = supabase
       .channel('timeline-events-realtime')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'timeline_events',
         },
-        () => {
-          // Refresh latest events when any timeline event changes
-          loadLatestEvents(clients);
-        }
+        refreshLatestEvents
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'timeline_events',
+        },
+        refreshLatestEvents
       )
       .subscribe();
 
@@ -254,8 +265,18 @@ const Clients = () => {
     }
   };
   const loadLatestEvents = async (timelines: ClientTimeline[]) => {
+    const requestId = ++latestEventsRequestIdRef.current;
+
     try {
       const timelineIds = timelines.map((t) => t.id);
+
+      if (timelineIds.length === 0) {
+        if (requestId === latestEventsRequestIdRef.current) {
+          setLatestEventsMap(new Map());
+        }
+        return;
+      }
+
       const { data, error } = await (supabaseClient as any)
         .from('latest_client_events')
         .select('timeline_id, icon, event_date, description')
@@ -265,6 +286,8 @@ const Clients = () => {
         console.error('Error loading latest events:', error);
         return;
       }
+
+      if (requestId !== latestEventsRequestIdRef.current) return;
 
       const map = new Map<string, { icon: string; event_date: string; description: string }>();
       for (const evt of data || []) {
@@ -677,7 +700,10 @@ const Clients = () => {
           setShowClientTimelineDialog(false);
           setClientForTimeline(null);
           // Refresh latest events after closing timeline dialog
-          if (clients.length > 0) loadLatestEvents(clients);
+          if (clients.length > 0) void loadLatestEvents(clients);
+        }}
+        onTimelineUpdated={() => {
+          if (clients.length > 0) void loadLatestEvents(clients);
         }} />
 
       }

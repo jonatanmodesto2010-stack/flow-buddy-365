@@ -25,7 +25,9 @@ interface Event {
   description: string;
   position: 'top' | 'bottom';
   status: 'created' | 'resolved' | 'no_response';
+  isNew?: boolean;
   time?: string;
+  created_at?: string;
   ixc_alert_line?: string;
 }
 
@@ -51,12 +53,14 @@ interface ClientTimelineDialogProps {
   client: Client;
   isOpen: boolean;
   onClose: () => void;
+  onTimelineUpdated?: () => void;
 }
 
 export const ClientTimelineDialog = ({
   client,
   isOpen,
   onClose,
+  onTimelineUpdated,
 }: ClientTimelineDialogProps) => {
   const [timelineData, setTimelineData] = useState<TimelineData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -230,10 +234,12 @@ export const ClientTimelineDialog = ({
         updateLine={async (lineId, events) => {
         try {
           // Deletar eventos antigos da linha
-          await supabase
+          const { error: deleteError } = await supabase
             .from('timeline_events')
             .delete()
             .eq('line_id', lineId);
+
+          if (deleteError) throw deleteError;
           
           // Inserir novos eventos
           if (events.length > 0) {
@@ -247,12 +253,15 @@ export const ClientTimelineDialog = ({
               icon: event.icon,
               icon_size: event.iconSize,
               event_order: index,
-              ixc_alert_line: (event as any).ixc_alert_line || null,
+              created_at: event.created_at || new Date().toISOString(),
+              ixc_alert_line: event.ixc_alert_line || null,
             }));
 
-            await supabase
+            const { error: insertError } = await supabase
               .from('timeline_events')
               .insert(eventsToInsert);
+
+            if (insertError) throw insertError;
           }
 
           // Atualizar estado local ao invés de recarregar tudo
@@ -268,6 +277,7 @@ export const ClientTimelineDialog = ({
 
           // Atualizar apenas a auditoria
           await loadLastUpdatedBy();
+          onTimelineUpdated?.();
           
           // Toast apenas para eventos NOVOS ou EDITADOS (não para mudança de status)
           const hasNewEvent = events.some(e => e.isNew);
