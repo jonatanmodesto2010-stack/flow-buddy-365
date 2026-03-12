@@ -25,7 +25,9 @@ interface Event {
   description: string;
   position: 'top' | 'bottom';
   status: 'created' | 'resolved' | 'no_response';
+  isNew?: boolean;
   time?: string;
+  created_at?: string;
   ixc_alert_line?: string;
 }
 
