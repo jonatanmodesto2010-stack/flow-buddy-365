@@ -28,6 +28,7 @@ const Clients = () => {
   const [overdueDaysMap, setOverdueDaysMap] = useState<Map<string, number>>(new Map());
   const [onlineClients, setOnlineClients] = useState<Set<string>>(new Set());
   const [onlineLoading, setOnlineLoading] = useState(false);
+  const [latestEventsMap, setLatestEventsMap] = useState<Map<string, { icon: string; description: string; event_date: string }>>(new Map());
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [overdueDaysLoading, setOverdueDaysLoading] = useState(false);
@@ -147,9 +148,10 @@ const Clients = () => {
       setClients(data || []);
       setTotalCount(count || 0);
 
-      // Load overdue days in background for visible clients only
+      // Load overdue days + latest events in background for visible clients only
       if (data && data.length > 0) {
         loadOverdueDays(data);
+        loadLatestEvents(data);
         // Load online status for blocked clients
         const blockedClients = data.filter((c) => !c.is_active && c.status !== 'archived' && c.status !== 'completed');
         if (blockedClients.length > 0) {
@@ -160,6 +162,7 @@ const Clients = () => {
       } else {
         setOverdueDaysMap(new Map());
         setOnlineClients(new Set());
+        setLatestEventsMap(new Map());
       }
     } catch (error: any) {
       console.error('Error loading clients:', error);
@@ -223,6 +226,26 @@ const Clients = () => {
       console.error('Error loading online status:', err);
     } finally {
       setOnlineLoading(false);
+    }
+  };
+
+  const loadLatestEvents = async (timelines: ClientTimeline[]) => {
+    try {
+      const timelineIds = timelines.map((t) => t.id);
+      const { data, error } = await (supabaseClient as any)
+        .from('latest_client_events')
+        .select('timeline_id, icon, description, event_date')
+        .in('timeline_id', timelineIds);
+      if (error) throw error;
+      const map = new Map<string, { icon: string; description: string; event_date: string }>();
+      for (const e of data || []) {
+        if (e.timeline_id) {
+          map.set(e.timeline_id, { icon: e.icon || '💬', description: e.description || '', event_date: e.event_date || '' });
+        }
+      }
+      setLatestEventsMap(map);
+    } catch (err) {
+      console.error('Error loading latest events:', err);
     }
   };
 
@@ -482,6 +505,16 @@ const Clients = () => {
                             <h3 className="text-card-foreground font-bold text-base uppercase tracking-wide truncate">
                               {client.client_name}
                             </h3>
+                            {latestEventsMap.has(client.id) && (() => {
+                              const evt = latestEventsMap.get(client.id)!;
+                              return (
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <span className="mr-1">{evt.icon}</span>
+                                  {evt.description}
+                                  {evt.event_date && <span className="ml-2 opacity-70">{evt.event_date}</span>}
+                                </p>
+                              );
+                            })()}
                           </div>
 
                           <div className="flex items-center gap-2 flex-shrink-0">
