@@ -130,3 +130,33 @@ export function sortClients(
     return a.client_name.localeCompare(b.client_name);
   });
 }
+
+/**
+ * Badge info for a client timeline (used in card rendering)
+ */
+export interface ClientBadgeInfo {
+  overdueDays: number;
+  isBlocked: boolean;
+  isOverdue: boolean;
+  isInactive: boolean;
+  isCompleted: boolean;
+}
+
+export function getClientBadgeInfo(
+  client: { id: string; is_active: boolean; status: string },
+  overdueDaysMap: Map<string, number>
+): ClientBadgeInfo {
+  const overdueDays = overdueDaysMap.get(client.id) || 0;
+  const isBlocked = !client.is_active && client.status !== 'archived' && client.status !== 'completed';
+  const isOverdue = client.is_active && client.status === 'active' && overdueDays > 0;
+  const isInactive = client.status === 'archived';
+  const isCompleted = client.status === 'completed';
+  return { overdueDays, isBlocked, isOverdue, isInactive, isCompleted };
+}
+
+export function getCardStyle(info: ClientBadgeInfo): string {
+  if (info.isBlocked) return 'bg-red-500/10 border border-red-500/30';
+  if (info.isOverdue) return 'bg-yellow-500/10 border border-yellow-500/30';
+  if (info.isInactive || info.isCompleted) return 'bg-muted border border-border opacity-70';
+  return 'bg-card border border-border';
+}

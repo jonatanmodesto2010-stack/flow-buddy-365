@@ -6,6 +6,9 @@ interface ClientCardProps {
   subtitle?: string;
   subtitleIcon?: string;
   subtitleSuffix?: string;
+  secondarySubtitle?: string;
+  secondarySubtitleIcon?: string;
+  secondarySubtitleSuffix?: string;
   cardStyle?: string;
   badges?: React.ReactNode;
   onClick?: () => void;
@@ -16,6 +19,9 @@ export const ClientCard = ({
   subtitle,
   subtitleIcon,
   subtitleSuffix,
+  secondarySubtitle,
+  secondarySubtitleIcon,
+  secondarySubtitleSuffix,
   cardStyle,
   badges,
   onClick,
@@ -37,6 +43,13 @@ export const ClientCard = ({
             {subtitleIcon && <span className="mr-1">{subtitleIcon}</span>}
             {subtitle}
             {subtitleSuffix && <span className="ml-2 opacity-70">{subtitleSuffix}</span>}
+          </p>
+        )}
+        {(secondarySubtitle || secondarySubtitleIcon) && (
+          <p className="text-xs text-muted-foreground truncate mt-0.5">
+            {secondarySubtitleIcon && <span className="mr-1">{secondarySubtitleIcon}</span>}
+            {secondarySubtitle}
+            {secondarySubtitleSuffix && <span className="ml-2 opacity-70">{secondarySubtitleSuffix}</span>}
           </p>
         )}
       </div>
