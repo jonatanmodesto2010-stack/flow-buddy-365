@@ -495,83 +495,40 @@ const Clients = () => {
               <div className="flex flex-col gap-2 w-full">
                     {sortedClients.map((client) => {
                   const info = getClientBadgeInfo(client);
+                  const evt = latestEventsMap.get(client.id);
                   return (
-                    <div
+                    <ClientCard
                       key={client.id}
-                      className={`w-full rounded-lg p-4 flex items-center gap-4 transition-all duration-150 hover:opacity-90 cursor-pointer ${getCardStyle(info)}`}
-                      onClick={() => handleOpenModal(client)}>
-                      
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-card-foreground font-bold text-base uppercase tracking-wide truncate">
-                              {client.client_name}
-                            </h3>
-                            {latestEventsMap.has(client.id) && (() => {
-                              const evt = latestEventsMap.get(client.id)!;
-                              return (
-                                <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                  <span className="mr-1">{evt.icon}</span>
-                                  {evt.description}
-                                  {evt.event_date && <span className="ml-2 opacity-70">{evt.event_date}</span>}
-                                </p>
-                              );
-                            })()}
+                      title={client.client_name}
+                      subtitle={evt?.description}
+                      subtitleIcon={evt?.icon}
+                      subtitleSuffix={evt?.event_date}
+                      cardStyle={getCardStyle(info)}
+                      onClick={() => handleOpenModal(client)}
+                      badges={<>
+                        {info.overdueDays > 0 && (
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${info.isBlocked ? 'bg-red-500 text-white' : info.isOverdue ? 'bg-yellow-500 text-black' : 'bg-green-500 text-white'}`}>
+                            {info.overdueDays}d
                           </div>
-
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {info.overdueDays > 0 &&
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${info.isBlocked ? 'bg-red-500 text-white' : info.isOverdue ? 'bg-yellow-500 text-black' : 'bg-green-500 text-white'}`}>
-                                {info.overdueDays}d
-                              </div>
-                        }
-
-                            {info.isBlocked &&
-                        <>
-                                <div className="px-3 py-1 bg-red-500/20 text-red-400 text-xs rounded-full flex items-center gap-1 font-semibold border border-red-500/30">
-                                  🔒
-                                </div>
-                                {client.client_id && (
-                          onlineClients.has(client.client_id) ?
-                          <div className="px-2.5 py-1 text-xs rounded-full flex items-center gap-1 font-semibold border border-green-500/30 text-muted-foreground bg-emerald-500">
-                                      <Wifi size={11} />
-                                      ON
-                                    </div> :
-                          !onlineLoading ?
-                          <div className="px-2.5 py-1 text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border bg-red-500">
-                                      <WifiOff size={11} />
-                                      OFF
-                                    </div> :
-                          null)
-                          }
-                              </>
-                        }
-
-                            {info.isInactive &&
-                        <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">
-                                Inativo
-                              </div>
-                        }
-
-                            {info.isCompleted &&
-                        <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">
-                                Finalizado
-                              </div>
-                        }
-
-                            <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenTimelineDialog(client);
-                          }}
-                          className="border-green-500/30 hover:bg-green-500/10 text-green-400 hover:text-green-300"
-                          title="Ver Timeline">
-                          
-                              <TrendingUp className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </div>);
-
+                        )}
+                        {info.isBlocked && (<>
+                          <div className="px-3 py-1 bg-red-500/20 text-red-400 text-xs rounded-full flex items-center gap-1 font-semibold border border-red-500/30">🔒</div>
+                          {client.client_id && (
+                            onlineClients.has(client.client_id) ? (
+                              <div className="px-2.5 py-1 text-xs rounded-full flex items-center gap-1 font-semibold border border-green-500/30 text-muted-foreground bg-emerald-500"><Wifi size={11} /> ON</div>
+                            ) : !onlineLoading ? (
+                              <div className="px-2.5 py-1 text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border bg-red-500"><WifiOff size={11} /> OFF</div>
+                            ) : null
+                          )}
+                        </>)}
+                        {info.isInactive && <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">Inativo</div>}
+                        {info.isCompleted && <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">Finalizado</div>}
+                        <Button variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); handleOpenTimelineDialog(client); }} className="border-green-500/30 hover:bg-green-500/10 text-green-400 hover:text-green-300" title="Ver Timeline">
+                          <TrendingUp className="w-4 h-4" />
+                        </Button>
+                      </>}
+                    />
+                  );
                 })}
                   </div>
               }
