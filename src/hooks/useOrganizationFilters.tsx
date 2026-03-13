@@ -6,6 +6,7 @@ import { useUserRole } from './useUserRole';
 export interface FilterValues {
   searchTerm: string;
   statusFilter: string;
+  filialFilter: string;
   tagsFilter: string[];
   dateFrom: string;
   dateTo: string;
@@ -19,6 +20,7 @@ export interface FilterValues {
 const DEFAULT_FILTERS: FilterValues = {
   searchTerm: '',
   statusFilter: 'all',
+  filialFilter: 'all',
   tagsFilter: [],
   dateFrom: '',
   dateTo: '',

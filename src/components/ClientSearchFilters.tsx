@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, SlidersHorizontal, X } from 'lucide-react';
+import { Search, SlidersHorizontal, X, Building2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -14,32 +14,57 @@ interface Tag {
   color: string;
 }
 
+/**
+ * Icon from organization_icons table.
+ * Prepared for future icon_key migration: today we use `icon` (emoji) for both
+ * display and filtering. In the future, `icon_key` will be the stable identifier
+ * and `icon` will be display-only.
+ */
+interface OrganizationIcon {
+  id: string;
+  icon: string;       // emoji for display (and current filter key)
+  label: string | null;
+  // Future: icon_key: string — stable identifier for filtering
+}
+
+const DEFAULT_ICONS: OrganizationIcon[] = [
+  { id: 'default-1', icon: '💬', label: 'Mensagem' },
+  { id: 'default-2', icon: '📅', label: 'Agendamento' },
+  { id: 'default-3', icon: '📄', label: 'Documento' },
+  { id: 'default-4', icon: '📞', label: 'Ligação' },
+  { id: 'default-5', icon: '✅', label: 'Concluído' },
+  { id: 'default-6', icon: '🤝', label: 'Acordo' },
+  { id: 'default-7', icon: '⚠️', label: 'Alerta' },
+  { id: 'default-8', icon: '🧰', label: 'Técnico' },
+];
+
 interface ClientSearchFiltersProps {
   onFilterChange: (filters: FilterValues) => void;
   organizationId: string | null;
   pageName: string;
+  filiais?: [string, string][];
 }
 
-export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }: ClientSearchFiltersProps) => {
+export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName, filiais = [] }: ClientSearchFiltersProps) => {
   const { filters, updateFilters, isLoading } = useOrganizationFilters(pageName);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [orgIcons, setOrgIcons] = useState<OrganizationIcon[]>([]);
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     if (organizationId) {
       loadTags();
+      loadOrganizationIcons();
     }
   }, [organizationId]);
 
   useEffect(() => {
     if (isLoading) return;
 
-    // Adicionar debounce de 400ms antes de aplicar filtros
     const timer = setTimeout(() => {
       onFilterChange(filters);
     }, 400);
 
-    // Cleanup: limpar timer se o componente for desmontado ou filters mudarem
     return () => clearTimeout(timer);
   }, [filters, isLoading, onFilterChange]);
 
@@ -57,6 +82,27 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
     }
   };
 
+  const loadOrganizationIcons = async () => {
+    if (!organizationId) return;
+
+    const { data, error } = await supabase
+      .from('organization_icons')
+      .select('id, icon, label')
+      .eq('organization_id', organizationId)
+      .order('created_at');
+
+    if (!error && data && data.length > 0) {
+      setOrgIcons(data.map(d => ({
+        id: d.id,
+        icon: d.icon,
+        label: d.label,
+      })));
+    } else {
+      // Fallback: use default icons if org has none configured
+      setOrgIcons(DEFAULT_ICONS);
+    }
+  };
+
   const applyFilters = (newFilters: Partial<FilterValues>) => {
     const updatedFilters = { ...filters, ...newFilters };
     updateFilters(updatedFilters);
@@ -66,6 +112,7 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
     updateFilters({
       searchTerm: '',
       statusFilter: 'all',
+      filialFilter: 'all',
       tagsFilter: [],
       dateFrom: '',
       dateTo: '',
@@ -84,15 +131,17 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
     applyFilters({ tagsFilter: newTagsFilter });
   };
 
-  const toggleIcon = (icon: string) => {
-    const newIconsFilter = filters.iconsFilter.includes(icon)
-      ? filters.iconsFilter.filter(i => i !== icon)
-      : [...filters.iconsFilter, icon];
+  const toggleIcon = (iconEmoji: string) => {
+    // Currently filtering by emoji value. Future: filter by icon_key
+    const newIconsFilter = filters.iconsFilter.includes(iconEmoji)
+      ? filters.iconsFilter.filter(i => i !== iconEmoji)
+      : [...filters.iconsFilter, iconEmoji];
     applyFilters({ iconsFilter: newIconsFilter });
   };
 
   const activeFiltersCount = [
     filters.statusFilter !== 'all',
+    filters.filialFilter !== 'all',
     filters.tagsFilter.length > 0,
     filters.dateFrom || filters.dateTo,
     filters.updateDateFrom || filters.updateDateTo,
@@ -101,11 +150,9 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
     filters.iconsFilter.length > 0,
   ].filter(Boolean).length;
 
-  const availableIcons = ['💬', '📅', '📄', '📞', '✅', '🤝', '⚠️', '🧰'];
-
   return (
     <div className="space-y-4 mb-6">
-      {/* Search Bar */}
+      {/* Search Bar + Filial Selector */}
       <div className="flex gap-2 items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
@@ -124,6 +171,22 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
             />
           )}
         </div>
+
+        {filiais.length > 0 && (
+          <Select value={filters.filialFilter} onValueChange={(value) => applyFilters({ filialFilter: value })}>
+            <SelectTrigger className="w-[220px] h-9 shrink-0">
+              <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
+              <SelectValue placeholder="Todas filiais" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas filiais</SelectItem>
+              {filiais.map(([id, name]) => (
+                <SelectItem key={id} value={id}>{name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
         <Popover open={showFilters} onOpenChange={setShowFilters}>
           <PopoverTrigger asChild>
             <Button variant="outline" className="relative shrink-0">
@@ -276,27 +339,28 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
                 </Select>
               </div>
 
-              {/* Icons Filter */}
+              {/* Icons Filter - Dynamic from organization_icons */}
               <div>
                 <label className="text-sm font-medium mb-2 block">Ícones</label>
                 <div className="flex flex-wrap gap-2">
-                  {availableIcons.map(icon => (
+                  {orgIcons.map(orgIcon => (
                     <button
-                      key={icon}
-                      onClick={() => toggleIcon(icon)}
+                      key={orgIcon.id}
+                      onClick={() => toggleIcon(orgIcon.icon)}
+                      title={orgIcon.label || orgIcon.icon}
                       className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl transition-all hover:scale-110 ${
-                        filters.iconsFilter.includes(icon)
+                        filters.iconsFilter.includes(orgIcon.icon)
                           ? 'bg-primary text-primary-foreground shadow-lg'
                           : 'bg-muted hover:bg-muted/80'
                       }`}
                     >
-                      {icon}
+                      {orgIcon.icon}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Apply Button */}
+              {/* Close Button */}
               <Button onClick={() => setShowFilters(false)} className="w-full">
                 Fechar
               </Button>
@@ -320,6 +384,15 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
               <X
                 className="w-3 h-3 cursor-pointer"
                 onClick={() => applyFilters({ statusFilter: 'all' })}
+              />
+            </Badge>
+          )}
+          {filters.filialFilter !== 'all' && (
+            <Badge variant="secondary" className="gap-1">
+              Filial: {filiais.find(([id]) => id === filters.filialFilter)?.[1] || filters.filialFilter}
+              <X
+                className="w-3 h-3 cursor-pointer"
+                onClick={() => applyFilters({ filialFilter: 'all' })}
               />
             </Badge>
           )}
