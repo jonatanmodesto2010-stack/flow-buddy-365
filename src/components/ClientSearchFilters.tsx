@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganizationFilters, FilterValues } from '@/hooks/useOrganizationFilters';
+import { useOrganizationIcons, DEFAULT_ICONS } from '@/hooks/useOrganizationIcons';
 
 interface Tag {
   id: string;
@@ -22,6 +23,7 @@ interface ClientSearchFiltersProps {
 
 export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }: ClientSearchFiltersProps) => {
   const { filters, updateFilters, isLoading } = useOrganizationFilters(pageName);
+  const { icons: orgIcons, loading: iconsLoading } = useOrganizationIcons(organizationId);
   const [tags, setTags] = useState<Tag[]>([]);
   const [showFilters, setShowFilters] = useState(false);
 
