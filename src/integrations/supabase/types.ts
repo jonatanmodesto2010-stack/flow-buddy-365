@@ -1259,6 +1259,30 @@ export type Database = {
       }
     }
     Views: {
+      latest_client_events: {
+        Row: {
+          description: string | null
+          event_date: string | null
+          icon: string | null
+          timeline_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timeline_lines_timeline_id_fkey"
+            columns: ["timeline_id"]
+            isOneToOne: false
+            referencedRelation: "client_timelines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timeline_lines_timeline_id_fkey"
+            columns: ["timeline_id"]
+            isOneToOne: false
+            referencedRelation: "unique_client_timelines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       unique_client_timelines: {
         Row: {
           boleto_value: number | null
