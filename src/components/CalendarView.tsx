@@ -45,7 +45,7 @@ export const CalendarView = ({
   onClientClick,
   hideStats = false,
   hideTitle = false,
-  className,
+  className
 }: CalendarViewProps) => {
   const [internalUser, setInternalUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,26 +99,26 @@ export const CalendarView = ({
   useEffect(() => {
     if (!user) return;
 
-    const eventsChannel = supabase
-      .channel('calendar-view-events')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'timeline_events' }, () => {
-        if (user.id) loadEvents(user.id);
-      })
-      .subscribe();
+    const eventsChannel = supabase.
+    channel('calendar-view-events').
+    on('postgres_changes', { event: '*', schema: 'public', table: 'timeline_events' }, () => {
+      if (user.id) loadEvents(user.id);
+    }).
+    subscribe();
 
-    const timelinesChannel = supabase
-      .channel('calendar-view-timelines')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'client_timelines' }, () => {
-        if (user.id) loadEvents(user.id);
-      })
-      .subscribe();
+    const timelinesChannel = supabase.
+    channel('calendar-view-timelines').
+    on('postgres_changes', { event: '*', schema: 'public', table: 'client_timelines' }, () => {
+      if (user.id) loadEvents(user.id);
+    }).
+    subscribe();
 
-    const linesChannel = supabase
-      .channel('calendar-view-lines')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'timeline_lines' }, () => {
-        if (user.id) loadEvents(user.id);
-      })
-      .subscribe();
+    const linesChannel = supabase.
+    channel('calendar-view-lines').
+    on('postgres_changes', { event: '*', schema: 'public', table: 'timeline_lines' }, () => {
+      if (user.id) loadEvents(user.id);
+    }).
+    subscribe();
 
     return () => {
       supabase.removeChannel(eventsChannel);
@@ -131,25 +131,25 @@ export const CalendarView = ({
     try {
       setLoading(true);
 
-      const { data: userRole, error: userRoleError } = await supabaseClient
-        .from('user_roles')
-        .select('organization_id')
-        .eq('user_id', userId)
-        .maybeSingle();
+      const { data: userRole, error: userRoleError } = await supabaseClient.
+      from('user_roles').
+      select('organization_id').
+      eq('user_id', userId).
+      maybeSingle();
 
       let organizationId = userRole?.organization_id ?? null;
 
       if (userRoleError) {
         const isMultipleRowsError =
-          userRoleError.code === 'PGRST116' ||
-          userRoleError.message?.toLowerCase().includes('multiple');
+        userRoleError.code === 'PGRST116' ||
+        userRoleError.message?.toLowerCase().includes('multiple');
 
         if (isMultipleRowsError) {
-          const { data: fallbackRoles, error: fallbackError } = await supabaseClient
-            .from('user_roles')
-            .select('organization_id')
-            .eq('user_id', userId)
-            .limit(1);
+          const { data: fallbackRoles, error: fallbackError } = await supabaseClient.
+          from('user_roles').
+          select('organization_id').
+          eq('user_id', userId).
+          limit(1);
 
           if (fallbackError) throw fallbackError;
           organizationId = fallbackRoles?.[0]?.organization_id ?? null;
@@ -163,9 +163,9 @@ export const CalendarView = ({
         return;
       }
 
-      const { data: eventsData, error: eventsError } = await supabaseClient
-        .from('timeline_events')
-        .select(`
+      const { data: eventsData, error: eventsError } = await supabaseClient.
+      from('timeline_events').
+      select(`
           id,
           event_date,
           event_time,
@@ -180,9 +180,9 @@ export const CalendarView = ({
               organization_id
             )
           )
-        `)
-        .eq('timeline_lines.client_timelines.organization_id', organizationId)
-        .limit(10000);
+        `).
+      eq('timeline_lines.client_timelines.organization_id', organizationId).
+      limit(10000);
 
       if (eventsError) throw eventsError;
 
@@ -193,16 +193,16 @@ export const CalendarView = ({
         event_time: event.event_time,
         description: event.description,
         status: event.status,
-        icon: event.icon,
+        icon: event.icon
       }));
 
       setEvents(eventsWithClients);
-      setRefreshKey(prev => prev + 1);
+      setRefreshKey((prev) => prev + 1);
     } catch (error: any) {
       toast({
         title: 'Erro ao carregar eventos',
         description: error.message,
-        variant: 'destructive',
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);
@@ -228,10 +228,10 @@ export const CalendarView = ({
   };
 
   const filteredEvents = useMemo(() => {
-    return events.filter(event => {
+    return events.filter((event) => {
       const matchesStatus = statusFilter === 'all' || event.status === statusFilter;
       const matchesClient = clientSearch === '' ||
-        event.client_name.toLowerCase().includes(clientSearch.toLowerCase());
+      event.client_name.toLowerCase().includes(clientSearch.toLowerCase());
       const matchesIcon = iconsFilter.length === 0 || iconsFilter.includes(event.icon);
       return matchesStatus && matchesClient && matchesIcon;
     });
@@ -240,21 +240,21 @@ export const CalendarView = ({
   const getEventsForDay = (day: number, month?: number) => {
     const targetMonth = month !== undefined ? month : currentDate.getMonth() + 1;
     const dateStr = `${String(day).padStart(2, '0')}/${String(targetMonth).padStart(2, '0')}`;
-    return filteredEvents.filter(event => event.event_date === dateStr);
+    return filteredEvents.filter((event) => event.event_date === dateStr);
   };
 
   const monthlyStats = useMemo(() => {
     const stats = { total: filteredEvents.length, created: 0, resolved: 0, no_response: 0 };
-    filteredEvents.forEach(event => {
-      if (event.status === 'created') stats.created++;
-      else if (event.status === 'resolved') stats.resolved++;
-      else if (event.status === 'no_response') stats.no_response++;
+    filteredEvents.forEach((event) => {
+      if (event.status === 'created') stats.created++;else
+      if (event.status === 'resolved') stats.resolved++;else
+      if (event.status === 'no_response') stats.no_response++;
     });
     return stats;
   }, [filteredEvents]);
 
   const hasNoResponseStatus = (clientName: string) => {
-    return events.some(event => event.client_name === clientName && event.status === 'no_response');
+    return events.some((event) => event.client_name === clientName && event.status === 'no_response');
   };
 
   const goToToday = () => setCurrentDate(new Date());
@@ -295,18 +295,18 @@ export const CalendarView = ({
 
   const getStatusCounts = (dayEvents: Event[]) => {
     const counts = { created: 0, resolved: 0, no_response: 0 };
-    dayEvents.forEach(event => {
-      if (event.status === 'created') counts.created++;
-      else if (event.status === 'resolved') counts.resolved++;
-      else if (event.status === 'no_response') counts.no_response++;
+    dayEvents.forEach((event) => {
+      if (event.status === 'created') counts.created++;else
+      if (event.status === 'resolved') counts.resolved++;else
+      if (event.status === 'no_response') counts.no_response++;
     });
     return counts;
   };
 
   const monthNames = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-  ];
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
 
   const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const { daysInMonth, startingDayOfWeek } = getDaysInMonth(currentDate);
@@ -316,26 +316,26 @@ export const CalendarView = ({
       <div className={cn("p-6", className)}>
         <div className="h-9 w-64 bg-muted animate-pulse rounded mb-6" />
         <div className="h-96 bg-muted animate-pulse rounded-xl" />
-      </div>
-    );
+      </div>);
+
   }
 
   return (
     <div className={cn(className)}>
       <motion.div
         initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        {!hideTitle && (
-          <div className="mb-6">
+        animate={{ opacity: 1, y: 0 }}>
+        
+        {!hideTitle &&
+        <div className="mb-6">
             <h2 className="text-3xl font-bold text-foreground mb-2">Calendário de Eventos</h2>
             <p className="text-muted-foreground">Visualize todos os eventos das suas timelines</p>
           </div>
-        )}
+        }
 
         {/* Monthly Summary */}
-        {!hideStats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        {!hideStats &&
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -371,7 +371,7 @@ export const CalendarView = ({
               </CardContent>
             </Card>
           </div>
-        )}
+        }
 
         {/* Filters */}
         <div className="bg-card border border-border rounded-xl p-4 mb-6 shadow-lg">
@@ -384,8 +384,8 @@ export const CalendarView = ({
                     placeholder="Buscar por cliente..."
                     value={clientSearch}
                     onChange={(e) => setClientSearch(e.target.value)}
-                    className="pl-10"
-                  />
+                    className="pl-10" />
+                  
                 </div>
               </div>
               <div className="sm:w-48">
@@ -407,25 +407,25 @@ export const CalendarView = ({
             <div>
               <label className="text-sm font-medium mb-2 block text-muted-foreground">Filtrar por ícone</label>
               <div className="flex flex-wrap gap-2">
-                {['💬', '📅', '📄', '📞', '✅', '🤝', '⚠️', '🧰'].map(icon => (
-                  <button
-                    key={icon}
-                    onClick={() => {
-                      setIconsFilter(prev =>
-                        prev.includes(icon)
-                          ? prev.filter(i => i !== icon)
-                          : [...prev, icon]
-                      );
-                    }}
-                    className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl transition-all hover:scale-110 ${
-                      iconsFilter.includes(icon)
-                        ? 'bg-primary text-primary-foreground shadow-lg'
-                        : 'bg-muted hover:bg-muted/80'
-                    }`}
-                  >
+                {['💬', '📅', '📄', '📞', '✅', '🤝', '⚠️', '🧰'].map((icon) =>
+                <button
+                  key={icon}
+                  onClick={() => {
+                    setIconsFilter((prev) =>
+                    prev.includes(icon) ?
+                    prev.filter((i) => i !== icon) :
+                    [...prev, icon]
+                    );
+                  }}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl transition-all hover:scale-110 ${
+                  iconsFilter.includes(icon) ?
+                  'bg-primary text-primary-foreground shadow-lg' :
+                  'bg-muted hover:bg-muted/80'}`
+                  }>
+                  
                     {icon}
                   </button>
-                ))}
+                )}
               </div>
             </div>
           </div>
@@ -446,14 +446,14 @@ export const CalendarView = ({
           </div>
 
           {/* Calendar Header */}
-          {viewMode !== 'today' && (
-            <div className="flex items-center justify-between mb-6">
+          {viewMode !== 'today' &&
+          <div className="flex items-center justify-between mb-6">
               <motion.button
-                onClick={viewMode === 'month' ? previousMonth : previousWeek}
-                className="p-2 hover:bg-muted rounded-lg transition-colors"
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-              >
+              onClick={viewMode === 'month' ? previousMonth : previousWeek}
+              className="p-2 hover:bg-muted rounded-lg transition-colors"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}>
+              
                 <ChevronLeft size={24} />
               </motion.button>
               <div className="flex items-center gap-3">
@@ -463,66 +463,66 @@ export const CalendarView = ({
                 <Button onClick={goToToday} variant="outline" size="sm">Ir para Hoje</Button>
               </div>
               <motion.button
-                onClick={viewMode === 'month' ? nextMonth : nextWeek}
-                className="p-2 hover:bg-muted rounded-lg transition-colors"
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-              >
+              onClick={viewMode === 'month' ? nextMonth : nextWeek}
+              className="p-2 hover:bg-muted rounded-lg transition-colors"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}>
+              
                 <ChevronRight size={24} />
               </motion.button>
             </div>
-          )}
+          }
 
-          {viewMode === 'today' ? (
-            <motion.div key="today-view" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4">
+          {viewMode === 'today' ?
+          <motion.div key="today-view" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4">
               <h2 className="text-2xl font-bold text-foreground mb-6 text-center">
                 Eventos de Hoje - {format(new Date(), 'dd/MM/yyyy', { locale: ptBR })}
               </h2>
               {(() => {
-                const today = new Date();
-                const todayStr = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}`;
-                const todayEvents = filteredEvents
-                  .filter(event => event.event_date === todayStr)
-                  .sort((a, b) => {
-                    if (!a.event_time) return 1;
-                    if (!b.event_time) return -1;
-                    return a.event_time.localeCompare(b.event_time);
-                  });
+              const today = new Date();
+              const todayStr = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}`;
+              const todayEvents = filteredEvents.
+              filter((event) => event.event_date === todayStr).
+              sort((a, b) => {
+                if (!a.event_time) return 1;
+                if (!b.event_time) return -1;
+                return a.event_time.localeCompare(b.event_time);
+              });
 
-                if (todayEvents.length === 0) {
-                  return (
-                    <div className="text-center py-16 text-muted-foreground">
+              if (todayEvents.length === 0) {
+                return (
+                  <div className="text-center py-16 text-muted-foreground">
                       <CalendarIcon size={48} className="mx-auto mb-4 opacity-50" />
                       <p className="text-lg">Nenhum evento para hoje</p>
-                    </div>
-                  );
-                }
+                    </div>);
 
-                return (
-                  <div className="space-y-3 max-w-3xl mx-auto">
-                    {todayEvents.map((event, idx) => (
-                      <motion.div
-                        key={event.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.05 }}
-                        onClick={() => handleEventClick(event.client_name)}
-                        className="p-5 border-l-4 rounded-lg cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] bg-card border-border"
-                        style={{
-                          borderLeftColor:
-                            event.status === 'created' ? 'hsl(var(--primary))' :
-                            event.status === 'resolved' ? '#10b981' : '#ef4444'
-                        }}
-                      >
+              }
+
+              return (
+                <div className="space-y-3 max-w-3xl mx-auto">
+                    {todayEvents.map((event, idx) =>
+                  <motion.div
+                    key={event.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.05 }}
+                    onClick={() => handleEventClick(event.client_name)}
+                    className="p-5 border-l-4 rounded-lg cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] bg-card border-border"
+                    style={{
+                      borderLeftColor:
+                      event.status === 'created' ? 'hsl(var(--primary))' :
+                      event.status === 'resolved' ? '#10b981' : '#ef4444'
+                    }}>
+                    
                         <div className="flex items-center gap-4">
                           <span className="text-4xl">{event.icon}</span>
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
-                              {event.event_time && (
-                                <span className="text-lg font-bold text-primary flex items-center gap-1">
+                              {event.event_time &&
+                          <span className="text-lg font-bold text-primary flex items-center gap-1">
                                   <Clock size={16} /> {event.event_time}
                                 </span>
-                              )}
+                          }
                               <span className="text-lg font-semibold text-foreground">{event.client_name}</span>
                             </div>
                             {event.description && <p className="text-sm text-muted-foreground mb-2">{event.description}</p>}
@@ -534,101 +534,101 @@ export const CalendarView = ({
                           </Badge>
                         </div>
                       </motion.div>
-                    ))}
-                  </div>
-                );
-              })()}
-            </motion.div>
-          ) : viewMode === 'month' ? (
-            <>
+                  )}
+                  </div>);
+
+            })()}
+            </motion.div> :
+          viewMode === 'month' ?
+          <>
               {/* Day Names */}
               <div className="grid grid-cols-7 gap-2 mb-2">
-                {dayNames.map(day => (
-                  <div key={day} className="text-center font-semibold text-muted-foreground py-2">{day}</div>
-                ))}
+                {dayNames.map((day) =>
+              <div key={day} className="text-center font-semibold text-muted-foreground py-2">{day}</div>
+              )}
               </div>
 
               {/* Calendar Grid */}
               <div className="grid grid-cols-7 gap-2">
-                {Array.from({ length: startingDayOfWeek }).map((_, index) => (
-                  <div key={`empty-${index}`} className="aspect-square" />
-                ))}
+                {Array.from({ length: startingDayOfWeek }).map((_, index) =>
+              <div key={`empty-${index}`} className="aspect-square" />
+              )}
                 {Array.from({ length: daysInMonth }).map((_, index) => {
-                  const day = index + 1;
-                  const dayEvents = getEventsForDay(day);
-                  const statusCounts = getStatusCounts(dayEvents);
-                  const isToday =
-                    day === new Date().getDate() &&
-                    currentDate.getMonth() === new Date().getMonth() &&
-                    currentDate.getFullYear() === new Date().getFullYear();
+                const day = index + 1;
+                const dayEvents = getEventsForDay(day);
+                const statusCounts = getStatusCounts(dayEvents);
+                const isToday =
+                day === new Date().getDate() &&
+                currentDate.getMonth() === new Date().getMonth() &&
+                currentDate.getFullYear() === new Date().getFullYear();
 
-                  return (
-                    <motion.div
-                      key={day}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: index * 0.01 }}
-                      onClick={() => dayEvents.length > 0 && handleDayClick(day)}
-                      className={`aspect-square border rounded-lg p-2 ${
-                        isToday ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-muted'
-                      } transition-colors ${dayEvents.length > 0 ? 'cursor-pointer' : ''}`}
-                    >
+                return (
+                  <motion.div
+                    key={day}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.01 }}
+                    onClick={() => dayEvents.length > 0 && handleDayClick(day)}
+                    className={`aspect-square border rounded-lg p-2 ${
+                    isToday ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-muted'} transition-colors ${
+                    dayEvents.length > 0 ? 'cursor-pointer' : ''}`}>
+                    
                       <div className={`text-sm font-semibold mb-1 ${isToday ? 'text-primary' : 'text-foreground'}`}>{day}</div>
-                      {dayEvents.length > 0 && (
-                        <div className="space-y-1">
-                          {dayEvents.slice(0, 2).map(event => (
-                            <div key={event.id} className="text-xs p-1 bg-primary/20 rounded truncate" title={`${event.event_time ? event.event_time + ' - ' : ''}${event.client_name}: ${event.description || ''}`}>
+                      {dayEvents.length > 0 &&
+                    <div className="space-y-1">
+                          {dayEvents.slice(0, 2).map((event) =>
+                      <div key={event.id} className="text-xs p-1 bg-primary/20 rounded truncate" title={`${event.event_time ? event.event_time + ' - ' : ''}${event.client_name}: ${event.description || ''}`}>
                               <span className="mr-1">{event.icon}</span>
                               {event.event_time && <span className="font-semibold">{event.event_time} </span>}
                               <span className={`font-medium ${hasNoResponseStatus(event.client_name) ? 'text-red-600 dark:text-red-400' : ''}`}>
                                 {event.client_name}
                               </span>
                             </div>
-                          ))}
-                          {dayEvents.length > 2 && (
-                            <div className="text-xs text-muted-foreground">+{dayEvents.length - 2} mais</div>
-                          )}
+                      )}
+                          {dayEvents.length > 2 &&
+                      <div className="text-xs text-muted-foreground">+{dayEvents.length - 2} mais</div>
+                      }
                           <div className="flex gap-1 mt-1">
                             {statusCounts.created > 0 && <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">📝 {statusCounts.created}</Badge>}
                             {statusCounts.resolved > 0 && <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">✅ {statusCounts.resolved}</Badge>}
                             {statusCounts.no_response > 0 && <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">🚫 {statusCounts.no_response}</Badge>}
                           </div>
                         </div>
-                      )}
-                    </motion.div>
-                  );
-                })}
+                    }
+                    </motion.div>);
+
+              })}
               </div>
-            </>
-          ) : (
-            /* Week View */
-            <div className="space-y-4">
+            </> : (
+
+          /* Week View */
+          <div className="space-y-4">
               <div className="grid grid-cols-7 gap-2">
                 {getWeekDays(currentDate).map((weekDay, index) => {
-                  const day = weekDay.getDate();
-                  const month = weekDay.getMonth();
-                  const year = weekDay.getFullYear();
-                  const dayEvents = getEventsForDay(day, month + 1);
-                  const isToday =
-                    day === new Date().getDate() &&
-                    month === new Date().getMonth() &&
-                    year === new Date().getFullYear();
+                const day = weekDay.getDate();
+                const month = weekDay.getMonth();
+                const year = weekDay.getFullYear();
+                const dayEvents = getEventsForDay(day, month + 1);
+                const isToday =
+                day === new Date().getDate() &&
+                month === new Date().getMonth() &&
+                year === new Date().getFullYear();
 
-                  return (
-                    <div key={index} className="space-y-2">
+                return (
+                  <div key={index} className="space-y-2">
                       <div className={`text-center p-2 rounded-lg ${isToday ? 'bg-primary text-primary-foreground font-bold' : 'bg-muted'}`}>
                         <div className="text-xs">{dayNames[weekDay.getDay()]}</div>
                         <div className="text-lg">{day}</div>
                       </div>
                       <div className="space-y-2 min-h-[200px]">
-                        {dayEvents.map(event => (
-                          <motion.div
-                            key={event.id}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            onClick={() => handleEventClick(event.client_name)}
-                            className="p-2 border border-border rounded-lg bg-card hover:bg-muted transition-colors cursor-pointer"
-                          >
+                        {dayEvents.map((event) =>
+                      <motion.div
+                        key={event.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        onClick={() => handleEventClick(event.client_name)}
+                        className="p-2 border border-border rounded-lg bg-card hover:bg-muted transition-colors cursor-pointer">
+                        
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-lg">{event.icon}</span>
                               <div className="flex-1 min-w-0">
@@ -645,14 +645,14 @@ export const CalendarView = ({
                               {event.status === 'no_response' && '🚫'}
                             </Badge>
                           </motion.div>
-                        ))}
+                      )}
                       </div>
-                    </div>
-                  );
-                })}
+                    </div>);
+
+              })}
               </div>
-            </div>
-          )}
+            </div>)
+          }
         </div>
 
         {/* Events Legend */}
@@ -663,15 +663,15 @@ export const CalendarView = ({
           <div className="flex flex-wrap gap-4">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-[hsl(var(--status-created))] rounded-full" />
-              <span className="text-sm text-muted-foreground">Criados</span>
+              <span className="text-sm text-muted-foreground">​</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl">✅</span>
-              <span className="text-sm text-muted-foreground">Respondeu</span>
+              <span className="text-xl">​</span>
+              <span className="text-sm text-muted-foreground">​</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl">🚫</span>
-              <span className="text-sm text-muted-foreground">Não Respondeu</span>
+              <span className="text-xl">​</span>
+              
             </div>
           </div>
 
@@ -688,24 +688,24 @@ export const CalendarView = ({
               Eventos do dia {selectedDay} de {monthNames[currentDate.getMonth()]}
             </DialogTitle>
           </DialogHeader>
-          {selectedDay && (
-            <div className="space-y-3 mt-4">
-              {getEventsForDay(selectedDay).map(event => (
-                <div
-                  key={event.id}
-                  onClick={() => handleEventClick(event.client_name)}
-                  className="p-4 border border-border rounded-lg bg-card hover:bg-muted transition-colors cursor-pointer"
-                >
+          {selectedDay &&
+          <div className="space-y-3 mt-4">
+              {getEventsForDay(selectedDay).map((event) =>
+            <div
+              key={event.id}
+              onClick={() => handleEventClick(event.client_name)}
+              className="p-4 border border-border rounded-lg bg-card hover:bg-muted transition-colors cursor-pointer">
+              
                   <div className="flex items-start gap-3">
                     <span className="text-2xl">{event.icon}</span>
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          {event.event_time && (
-                            <div className="text-sm font-bold text-primary mb-1 flex items-center gap-1">
+                          {event.event_time &&
+                      <div className="text-sm font-bold text-primary mb-1 flex items-center gap-1">
                               <Clock size={14} /> {event.event_time}
                             </div>
-                          )}
+                      }
                           <h4 className={`font-semibold ${hasNoResponseStatus(event.client_name) ? 'text-red-600 dark:text-red-400' : 'text-foreground'}`}>
                             {event.client_name}
                           </h4>
@@ -721,13 +721,13 @@ export const CalendarView = ({
                     </div>
                   </div>
                 </div>
-              ))}
+            )}
             </div>
-          )}
+          }
         </DialogContent>
       </Dialog>
-    </div>
-  );
+    </div>);
+
 };
 
 export default CalendarView;
