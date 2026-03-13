@@ -337,22 +337,8 @@ const Clients = () => {
     }
   };
 
-  const getClientBadgeInfo = (client: ClientTimeline) => {
-    const overdueDays = overdueDaysMap.get(client.id) || 0;
-    const isBlocked = !client.is_active && client.status !== 'archived' && client.status !== 'completed';
-    const isOverdue = client.is_active && client.status === 'active' && overdueDays > 0;
-    const isInactive = client.status === 'archived';
-    const isCompleted = client.status === 'completed';
-
-    return { overdueDays, isBlocked, isOverdue, isInactive, isCompleted };
-  };
-
-  const getCardStyle = (info: ReturnType<typeof getClientBadgeInfo>) => {
-    if (info.isBlocked) return 'bg-red-500/10 border border-red-500/30';
-    if (info.isOverdue) return 'bg-yellow-500/10 border border-yellow-500/30';
-    if (info.isInactive || info.isCompleted) return 'bg-muted border border-border opacity-70';
-    return 'bg-card border border-border';
-  };
+  const getClientInfo = (client: ClientTimeline) => getClientBadgeInfo(client, overdueDaysMap);
+  const getClientCardStyle = (info: ReturnType<typeof getClientInfo>) => getCardStyle(info);
 
   if (roleLoading) {
     return (
