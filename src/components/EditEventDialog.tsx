@@ -1,11 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
-import { X, Calendar, MessageSquare, CheckCircle2, AlertCircle, GripVertical, Trash2, Phone, Wrench } from 'lucide-react';
+import { X, GripVertical, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { useOrganizationIcons, DEFAULT_ICONS } from '@/hooks/useOrganizationIcons';
+import { useUserRole } from '@/hooks/useUserRole';
 
 const EditEventDialog = ({ isOpen, onClose, onUpdate, onDelete, event }) => {
+  const { organizationId } = useUserRole();
+  const { icons: orgIcons } = useOrganizationIcons(organizationId);
+
+  const displayIcons = orgIcons.length > 0
+    ? orgIcons.map(i => ({ icon: i.icon, label: i.label || i.icon }))
+    : DEFAULT_ICONS;
+
   const [formData, setFormData] = useState({ ...event });
 
   useEffect(() => {
@@ -17,15 +26,6 @@ const EditEventDialog = ({ isOpen, onClose, onUpdate, onDelete, event }) => {
   const dragControls = useDragControls();
   const constraintsRef = useRef(null);
 
-  const eventTypes = [
-    { value: 'meeting', label: 'Reunião', icon: Calendar },
-    { value: 'task', label: 'Tarefa', icon: CheckCircle2 },
-    { value: 'note', label: 'Nota', icon: MessageSquare },
-    { value: 'alert', label: 'Alerta', icon: AlertCircle },
-    { value: 'call', label: 'Ligação', icon: Phone },
-    { value: 'maintenance', label: 'Manutenção', icon: Wrench },
-  ];
-
   const handleSubmit = (e) => {
     e.preventDefault();
     if (formData.description) {
@@ -34,18 +34,6 @@ const EditEventDialog = ({ isOpen, onClose, onUpdate, onDelete, event }) => {
         title: formData.description.substring(0, 30) + '...',
       });
     }
-  };
-
-  const handleTypeChange = (type) => {
-    const iconMap = {
-      meeting: 'calendar',
-      task: 'check',
-      note: 'message',
-      alert: 'alert',
-      call: 'phone',
-      maintenance: 'wrench'
-    };
-    setFormData({ ...formData, type, icon: iconMap[type] });
   };
 
   return (
@@ -73,7 +61,7 @@ const EditEventDialog = ({ isOpen, onClose, onUpdate, onDelete, event }) => {
             className="fixed left-1/2 top-[10%] -translate-x-1/2 w-full max-w-2xl z-50 p-4 cursor-grab"
           >
             <div className="glass-effect rounded-2xl p-8 border-2 border-purple-500/30 shadow-2xl">
-              <div 
+              <div
                 onPointerDown={(e) => dragControls.start(e)}
                 className="flex items-center justify-between mb-6 cursor-grab active:cursor-grabbing"
               >
@@ -108,29 +96,26 @@ const EditEventDialog = ({ isOpen, onClose, onUpdate, onDelete, event }) => {
 
                 <div>
                   <Label className="text-gray-300 mb-3 block">
-                    Tipo de Evento
+                    Ícone do Evento
                   </Label>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {eventTypes.map((type) => {
-                      const Icon = type.icon;
-                      return (
-                        <motion.button
-                          key={type.value}
-                          type="button"
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => handleTypeChange(type.value)}
-                          className={`flex flex-col items-center gap-2 p-4 rounded-xl transition-all duration-300 ${
-                            formData.type === type.value
-                              ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
-                              : 'bg-white/5 text-gray-300 hover:bg-white/10'
-                          }`}
-                        >
-                          <Icon className="h-6 w-6" />
-                          <span className="text-sm font-medium">{type.label}</span>
-                        </motion.button>
-                      );
-                    })}
+                  <div className="grid grid-cols-3 md:grid-cols-4 gap-3 max-h-[200px] overflow-y-auto">
+                    {displayIcons.map((item) => (
+                      <motion.button
+                        key={item.icon}
+                        type="button"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setFormData({ ...formData, icon: item.icon })}
+                        className={`flex flex-col items-center gap-2 p-3 rounded-xl transition-all duration-300 ${
+                          formData.icon === item.icon
+                            ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
+                            : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                        }`}
+                      >
+                        <span className="text-2xl">{item.icon}</span>
+                        <span className="text-xs font-medium truncate w-full text-center">{item.label}</span>
+                      </motion.button>
+                    ))}
                   </div>
                 </div>
 
