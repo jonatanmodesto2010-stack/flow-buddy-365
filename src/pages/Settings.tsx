@@ -109,7 +109,18 @@ const Settings = () => {
             )}
 
           <TabsContent value="history">
-            <HistorySettings />
+            <Tabs defaultValue="changelog" className="w-full">
+              <TabsList className="mb-6">
+                <TabsTrigger value="changelog">Log de Atualizações</TabsTrigger>
+                <TabsTrigger value="completed">Cobranças Finalizadas</TabsTrigger>
+              </TabsList>
+              <TabsContent value="changelog">
+                <SystemChangelogSettings />
+              </TabsContent>
+              <TabsContent value="completed">
+                <HistorySettings />
+              </TabsContent>
+            </Tabs>
           </TabsContent>
         </Tabs>
       </div>
