@@ -338,7 +338,6 @@ const Clients = () => {
   };
 
   const getClientInfo = (client: ClientTimeline) => getClientBadgeInfo(client, overdueDaysMap);
-  const getClientCardStyle = (info: ReturnType<typeof getClientInfo>) => getCardStyle(info);
 
   if (roleLoading) {
     return (
