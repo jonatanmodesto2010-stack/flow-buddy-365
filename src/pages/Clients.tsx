@@ -12,17 +12,24 @@ import { supabase } from '@/integrations/supabase/client';
 import { supabaseClient } from '@/lib/supabase-client';
 import { useToast } from '@/hooks/use-toast';
 import { useUserRole } from '@/hooks/useUserRole';
-import { calculateOverdueDays, type ClientTimeline, type GroupedClient } from '@/lib/client-utils';
+import { calculateOverdueDays, type ClientTimeline } from '@/lib/client-utils';
 import type { User } from '@supabase/supabase-js';
 import { ClientTimelineDialog } from '@/components/ClientTimelineDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FilterValues } from '@/hooks/useOrganizationFilters';
+import {
+  fetchTimelineIdsByTags,
+  fetchTimelineIdsByBoletos,
+  fetchTimelineIdsByIcons,
+  fetchTimelineIdsByTimeline,
+  intersectIdSets,
+} from '@/lib/client-filter-queries';
 
 const ITEMS_PER_PAGE = 30;
 
 const CLIENT_COLUMNS = 'id, client_name, client_id, status, is_active, organization_id, ixc_filial_id, ixc_filial_name, start_date, created_at, updated_at, user_id, completed_at, completion_notes, boleto_value, due_date';
 
 const Clients = () => {
-
   const [clients, setClients] = useState<ClientTimeline[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [overdueDaysMap, setOverdueDaysMap] = useState<Map<string, number>>(new Map());
@@ -45,22 +52,38 @@ const Clients = () => {
   const [showClientTimelineDialog, setShowClientTimelineDialog] = useState(false);
   const [clientForTimeline, setClientForTimeline] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [filialFilter, setFilialFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'default' | 'overdue_desc' | 'overdue_asc'>('default');
   const [filiais, setFiliais] = useState<[string, string][]>([]);
+
+  // Unified filter state
+  const [filters, setFilters] = useState<FilterValues>({
+    searchTerm: '',
+    statusFilter: 'all',
+    filialFilter: 'all',
+    tagsFilter: [],
+    dateFrom: '',
+    dateTo: '',
+    updateDateFrom: '',
+    updateDateTo: '',
+    boletoFilter: 'all',
+    timelineFilter: 'all',
+    iconsFilter: [],
+  });
+
+  // Debounce ref for searchTerm
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevFiltersRef = useRef<FilterValues>(filters);
+  const isFirstFilterChange = useRef(true);
+
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) setUser(session.user);else
-      navigate('/auth');
+      if (session?.user) setUser(session.user); else navigate('/auth');
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      if (session?.user) setUser(session.user);else
-      navigate('/auth');
+      if (session?.user) setUser(session.user); else navigate('/auth');
     });
     return () => subscription.unsubscribe();
   }, [navigate]);
@@ -75,29 +98,11 @@ const Clients = () => {
 
     const channel = supabase
       .channel('timeline-events-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'timeline_events',
-        },
-        refreshLatestEvents
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'timeline_events',
-        },
-        refreshLatestEvents
-      )
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'timeline_events' }, refreshLatestEvents)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'timeline_events' }, refreshLatestEvents)
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [organizationId, clients]);
 
   // Load filiais once
@@ -106,20 +111,71 @@ const Clients = () => {
     loadFiliais();
   }, [organizationId]);
 
-  // Load clients when filters/page change
+  // React to filter changes with debounce for searchTerm
   useEffect(() => {
-    if (organizationId) loadClients();
-  }, [organizationId, currentPage, searchTerm, statusFilter, filialFilter]);
+    if (!organizationId) return;
+
+    // Skip the initial render (filters come from the hook persistence)
+    if (isFirstFilterChange.current) {
+      isFirstFilterChange.current = false;
+      loadClientsWithFilters(filters);
+      return;
+    }
+
+    const prev = prevFiltersRef.current;
+    const onlySearchChanged = prev.statusFilter === filters.statusFilter
+      && prev.filialFilter === filters.filialFilter
+      && prev.boletoFilter === filters.boletoFilter
+      && prev.timelineFilter === filters.timelineFilter
+      && JSON.stringify(prev.tagsFilter) === JSON.stringify(filters.tagsFilter)
+      && JSON.stringify(prev.iconsFilter) === JSON.stringify(filters.iconsFilter)
+      && prev.dateFrom === filters.dateFrom
+      && prev.dateTo === filters.dateTo
+      && prev.updateDateFrom === filters.updateDateFrom
+      && prev.updateDateTo === filters.updateDateTo
+      && prev.searchTerm !== filters.searchTerm;
+
+    prevFiltersRef.current = filters;
+
+    if (onlySearchChanged && filters.searchTerm !== '') {
+      // Debounce 300ms for typing
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = setTimeout(() => {
+        setCurrentPage(1);
+        loadClientsWithFilters(filters);
+      }, 300);
+    } else {
+      // Immediate reload for all other filter changes
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      setCurrentPage(1);
+      loadClientsWithFilters(filters);
+    }
+
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [filters, organizationId]);
+
+  // React to page changes
+  useEffect(() => {
+    if (organizationId && !isFirstFilterChange.current) {
+      loadClientsWithFilters(filters);
+    }
+  }, [currentPage]);
+
+  const handleFilterChange = useCallback((newFilters: FilterValues) => {
+    setFilters(newFilters);
+  }, []);
 
   const loadFiliais = async () => {
     if (!organizationId) return;
     try {
-      const { data } = await (supabaseClient as any).
-      from('unique_client_timelines').
-      select('ixc_filial_id, ixc_filial_name').
-      eq('organization_id', organizationId).
-      not('ixc_filial_id', 'is', null).
-      not('ixc_filial_name', 'is', null);
+      const { data } = await (supabaseClient as any)
+        .from('unique_client_timelines')
+        .select('ixc_filial_id, ixc_filial_name')
+        .eq('organization_id', organizationId)
+        .not('ixc_filial_id', 'is', null)
+        .not('ixc_filial_name', 'is', null);
 
       if (data) {
         const map = new Map<string, string>();
@@ -135,43 +191,103 @@ const Clients = () => {
     }
   };
 
-  const loadClients = async () => {
+  /**
+   * Main data loading function using unified filters.
+   * All filters are applied server-side via subqueries + main query.
+   */
+  const loadClientsWithFilters = async (f: FilterValues) => {
     if (!organizationId) return;
     try {
       setLoading(true);
 
-      // Build server-side query
-      let query = (supabaseClient as any).
-      from('unique_client_timelines').
-      select(CLIENT_COLUMNS, { count: 'exact' }).
-      eq('organization_id', organizationId);
+      // ── Step 1: Run subqueries in parallel for active filters ──
+      const [tagsIds, boletosIds, iconsIds, timelineIds] = await Promise.all([
+        f.tagsFilter.length > 0
+          ? fetchTimelineIdsByTags(organizationId, f.tagsFilter)
+          : Promise.resolve(null),
+        f.boletoFilter !== 'all'
+          ? fetchTimelineIdsByBoletos(organizationId, f.boletoFilter)
+          : Promise.resolve(null),
+        f.iconsFilter.length > 0
+          ? fetchTimelineIdsByIcons(organizationId, f.iconsFilter)
+          : Promise.resolve(null),
+        f.timelineFilter !== 'all'
+          ? fetchTimelineIdsByTimeline(organizationId, f.timelineFilter)
+          : Promise.resolve(null),
+      ]);
 
-      // Server-side filters
-      if (filialFilter !== 'all') {
-        query = query.eq('ixc_filial_id', filialFilter);
+      // ── Step 2: Intersect ID sets ──
+      const finalIds = intersectIdSets(tagsIds, boletosIds, iconsIds, timelineIds);
+
+      // Short-circuit: if intersection yielded empty set, no results possible
+      if (finalIds !== null && finalIds.size === 0) {
+        setClients([]);
+        setTotalCount(0);
+        setOverdueDaysMap(new Map());
+        setLatestEventsMap(new Map());
+        setOnlineClients(new Set());
+        return;
       }
 
-      if (searchTerm) {
-        // Search by name or client_id
-        query = query.or(`client_name.ilike.%${searchTerm}%,client_id.ilike.%${searchTerm}%`);
+      // ── Step 3: Build main query ──
+      let query = (supabaseClient as any)
+        .from('unique_client_timelines')
+        .select(CLIENT_COLUMNS, { count: 'exact' })
+        .eq('organization_id', organizationId);
+
+      // Apply .in() filter if subqueries produced results
+      if (finalIds !== null) {
+        const idsArray = Array.from(finalIds);
+        // Supabase .in() has URL length limits; chunk if needed
+        if (idsArray.length > 500) {
+          // For very large sets, we still apply .in() — Supabase handles via POST internally
+          query = query.in('id', idsArray);
+        } else {
+          query = query.in('id', idsArray);
+        }
       }
 
-      if (statusFilter === 'active') {
+      // Search filter
+      if (f.searchTerm) {
+        query = query.or(`client_name.ilike.%${f.searchTerm}%,client_id.ilike.%${f.searchTerm}%`);
+      }
+
+      // Status filter
+      if (f.statusFilter === 'active') {
         query = query.eq('is_active', true).eq('status', 'active');
-      } else if (statusFilter === 'blocked') {
+      } else if (f.statusFilter === 'blocked') {
         query = query.eq('is_active', false).not('status', 'in', '("archived","completed")');
-      } else if (statusFilter === 'inactive') {
+      } else if (f.statusFilter === 'inactive') {
         query = query.eq('status', 'archived');
-      } else if (statusFilter === 'completed') {
+      } else if (f.statusFilter === 'completed') {
         query = query.eq('status', 'completed');
       }
-      // 'overdue' filter handled after boleto load
-      // 'all' = no extra filter
+
+      // Filial filter
+      if (f.filialFilter !== 'all') {
+        query = query.eq('ixc_filial_id', f.filialFilter);
+      }
+
+      // Date filters (registration date)
+      if (f.dateFrom) {
+        query = query.gte('start_date', f.dateFrom);
+      }
+      if (f.dateTo) {
+        query = query.lte('start_date', f.dateTo);
+      }
+
+      // Update date filters
+      if (f.updateDateFrom) {
+        query = query.gte('updated_at', f.updateDateFrom);
+      }
+      if (f.updateDateTo) {
+        query = query.lte('updated_at', f.updateDateTo + 'T23:59:59.999Z');
+      }
 
       // Sort: blocked first (is_active asc), then by name
-      query = query.
-      order('is_active', { ascending: true }).
-      order('client_name', { ascending: true });
+      query = query
+        .order('is_active', { ascending: true })
+        .order('client_name', { ascending: true });
 
       // Paginate server-side
       const start = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -184,12 +300,11 @@ const Clients = () => {
       setClients(data || []);
       setTotalCount(count || 0);
 
-      // Load overdue days in background for visible clients only
+      // Load auxiliary data for visible clients
       if (data && data.length > 0) {
         loadOverdueDays(data);
         loadLatestEvents(data);
-        // Load online status for blocked clients
-        const blockedClients = data.filter((c) => !c.is_active && c.status !== 'archived' && c.status !== 'completed');
+        const blockedClients = data.filter((c: any) => !c.is_active && c.status !== 'archived' && c.status !== 'completed');
         if (blockedClients.length > 0) {
           loadOnlineStatus(blockedClients);
         } else {
@@ -213,12 +328,12 @@ const Clients = () => {
       setOverdueDaysLoading(true);
       const timelineIds = timelines.map((t) => t.id);
 
-      const { data: boletos } = await supabaseClient.
-      from('client_boletos').
-      select('timeline_id, due_date, status').
-      in('timeline_id', timelineIds);
+      const { data: boletos } = await supabaseClient
+        .from('client_boletos')
+        .select('timeline_id, due_date, status')
+        .in('timeline_id', timelineIds);
 
-      const boletosMap = new Map<string, {due_date: string;status: string;}[]>();
+      const boletosMap = new Map<string, { due_date: string; status: string }[]>();
       for (const b of boletos || []) {
         if (!boletosMap.has(b.timeline_id)) boletosMap.set(b.timeline_id, []);
         boletosMap.get(b.timeline_id)!.push(b);
@@ -237,6 +352,7 @@ const Clients = () => {
       setOverdueDaysLoading(false);
     }
   };
+
   const loadOnlineStatus = async (blockedClients: ClientTimeline[]) => {
     try {
       setOnlineLoading(true);
@@ -264,6 +380,7 @@ const Clients = () => {
       setOnlineLoading(false);
     }
   };
+
   const loadLatestEvents = async (timelines: ClientTimeline[]) => {
     const requestId = ++latestEventsRequestIdRef.current;
 
@@ -303,11 +420,6 @@ const Clients = () => {
     }
   };
 
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter, filialFilter]);
-
   // Sort clients based on sortBy option
   const sortedClients = useMemo(() => {
     if (sortBy === 'default') return clients;
@@ -338,7 +450,7 @@ const Clients = () => {
     try {
       const { error } = await supabaseClient.from('client_timelines').update(updatedData).eq('id', selectedClient.id);
       if (error) throw error;
-      await loadClients();
+      await loadClientsWithFilters(filters);
       toast({ title: 'Cliente atualizado', description: 'As informações foram atualizadas com sucesso.' });
     } catch (error: any) {
       toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
@@ -355,8 +467,8 @@ const Clients = () => {
     }
 
     try {
-      const { data: existing } = await supabaseClient.
-      from('client_timelines').select('id').eq('organization_id', organizationId).ilike('client_name', clientNameTrimmed);
+      const { data: existing } = await supabaseClient
+        .from('client_timelines').select('id').eq('organization_id', organizationId).ilike('client_name', clientNameTrimmed);
       if (existing && existing.length > 0) {
         toast({ title: 'Nome duplicado', description: `Já existe um cliente com o nome "${clientNameTrimmed}".`, variant: 'destructive' });
         return;
@@ -365,25 +477,25 @@ const Clients = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabaseClient.
-      from('client_timelines').
-      insert({
-        client_name: clientNameTrimmed,
-        client_id: newClientData.client_id.trim() || null,
-        start_date: newClientData.start_date,
-        is_active: true,
-        status: 'active',
-        organization_id: organizationId,
-        user_id: user.id
-      }).
-      select().
-      single();
+      const { data, error } = await supabaseClient
+        .from('client_timelines')
+        .insert({
+          client_name: clientNameTrimmed,
+          client_id: newClientData.client_id.trim() || null,
+          start_date: newClientData.start_date,
+          is_active: true,
+          status: 'active',
+          organization_id: organizationId,
+          user_id: user.id
+        })
+        .select()
+        .single();
 
       if (error) throw error;
-      await loadClients();
+      await loadClientsWithFilters(filters);
       setNewClientModalOpen(false);
       toast({ title: 'Cliente criado', description: `Cliente "${clientNameTrimmed}" foi adicionado com sucesso.` });
-      if (data) {setSelectedClient(data);setModalOpen(true);}
+      if (data) { setSelectedClient(data); setModalOpen(true); }
       setNewClientData({ client_name: '', client_id: '', start_date: new Date().toISOString().split('T')[0] });
     } catch (error: any) {
       toast({ title: 'Erro ao criar cliente', description: error.message, variant: 'destructive' });
@@ -414,9 +526,7 @@ const Clients = () => {
           <div className="max-w-7xl mx-auto">
             <div className="h-9 w-48 bg-muted animate-pulse rounded mb-6" />
             <div className="flex flex-col gap-3">
-              {[1, 2, 3, 4].map((i) =>
-                <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
-              )}
+              {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />)}
             </div>
           </div>
         </div>
@@ -447,9 +557,7 @@ const Clients = () => {
           <div className="max-w-7xl mx-auto">
             <div className="h-9 w-48 bg-muted animate-pulse rounded mb-6" />
             <div className="flex flex-col gap-3">
-              {[1, 2, 3, 4].map((i) =>
-                <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
-              )}
+              {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />)}
             </div>
           </div>
         </div>
@@ -460,183 +568,166 @@ const Clients = () => {
   return (
     <AppLayout>
       <div className="p-6">
-          <div className="max-w-[1600px] mx-auto flex gap-6">
-            {/* Left Column - Client List (35%) */}
-            <div className="w-[40%] min-w-0 flex-shrink-0">
-              <div className="animate-fade-in">
-                <div className="flex items-center gap-4 mb-6">
-                  <h2 className="text-2xl font-bold text-foreground">Clientes</h2>
-                  <span className="text-sm text-muted-foreground">
-                    {totalCount > 0 ? `${startIndex + 1} - ${endIndex} / ${totalCount}` : '0 clientes'}
-                  </span>
-                  {filiais.length > 0 &&
-                <Select value={filialFilter} onValueChange={setFilialFilter}>
-                      <SelectTrigger className="w-[220px] h-9">
-                        <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
-                        <SelectValue placeholder="Todas filiais" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas filiais</SelectItem>
-                        {filiais.map(([id, name]) =>
-                    <SelectItem key={id} value={id}>{name}</SelectItem>
-                    )}
-                      </SelectContent>
-                    </Select>
-                }
+        <div className="max-w-[1600px] mx-auto flex gap-6">
+          {/* Left Column - Client List (40%) */}
+          <div className="w-[40%] min-w-0 flex-shrink-0">
+            <div className="animate-fade-in">
+              <div className="flex items-center gap-4 mb-6">
+                <h2 className="text-2xl font-bold text-foreground">Clientes</h2>
+                <span className="text-sm text-muted-foreground">
+                  {totalCount > 0 ? `${startIndex + 1} - ${endIndex} / ${totalCount}` : '0 clientes'}
+                </span>
+              </div>
+
+              <ClientSearchFilters
+                onFilterChange={handleFilterChange}
+                organizationId={organizationId}
+                pageName="clients"
+                filiais={filiais}
+              />
+
+              {/* Pagination Controls */}
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Primeira página">
+                    <ChevronsLeft size={16} />
+                  </button>
+                  <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Página anterior">
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button onClick={() => loadClientsWithFilters(filters)} className="p-1.5 rounded hover:bg-muted transition-colors" title="Atualizar">
+                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                  </button>
+                  <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Próxima página">
+                    <ChevronRight size={16} />
+                  </button>
+                  <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Última página">
+                    <ChevronsRight size={16} />
+                  </button>
                 </div>
 
-                <ClientSearchFilters
-                onFilterChange={(filters) => {
-                  setSearchTerm(filters.searchTerm || '');
-                  setStatusFilter(filters.statusFilter || 'all');
-                }}
-                organizationId={organizationId}
-                pageName="clients" />
-              
-
-                {/* Pagination Controls */}
-                <div className="mb-4 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Primeira página">
-                      <ChevronsLeft size={16} />
-                    </button>
-                    <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Página anterior">
-                      <ChevronLeft size={16} />
-                    </button>
-                    <button onClick={loadClients} className="p-1.5 rounded hover:bg-muted transition-colors" title="Atualizar">
-                      <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                    </button>
-                    <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Próxima página">
-                      <ChevronRight size={16} />
-                    </button>
-                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Última página">
-                      <ChevronsRight size={16} />
-                    </button>
-                   </div>
-
-                  <div className="flex items-center gap-3">
-                    <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-                      <SelectTrigger className="w-[200px] h-9">
-                        <ArrowDownUp className="w-4 h-4 mr-2 text-muted-foreground" />
-                        <SelectValue placeholder="Ordenação" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">Ordenação padrão</SelectItem>
-                        <SelectItem value="overdue_desc">Maior atraso primeiro</SelectItem>
-                        <SelectItem value="overdue_asc">Menor atraso primeiro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <button
+                <div className="flex items-center gap-3">
+                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+                    <SelectTrigger className="w-[200px] h-9">
+                      <ArrowDownUp className="w-4 h-4 mr-2 text-muted-foreground" />
+                      <SelectValue placeholder="Ordenação" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Ordenação padrão</SelectItem>
+                      <SelectItem value="overdue_desc">Maior atraso primeiro</SelectItem>
+                      <SelectItem value="overdue_asc">Menor atraso primeiro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <button
                     onClick={() => navigate('/history')}
                     className="p-2 bg-primary/10 text-primary rounded-lg font-semibold hover:bg-primary/20 transition-all flex items-center justify-center whitespace-nowrap">
-                      <History size={18} />
-                    </button>
+                    <History size={18} />
+                  </button>
 
-                    <button
+                  <button
                     onClick={() => setNewClientModalOpen(true)}
                     className="p-2 bg-gradient-primary text-primary-foreground rounded-lg font-semibold hover:bg-gradient-hover transition-all flex items-center justify-center whitespace-nowrap">
-                      <Plus size={18} />
-                    </button>
-                  </div>
+                    <Plus size={18} />
+                  </button>
                 </div>
+              </div>
 
-                {/* Client List */}
-                {clients.length === 0 && !loading ?
-              <div className="text-center py-20 text-muted-foreground">
-                    <p>Nenhum cliente encontrado</p>
-                  </div> :
+              {/* Client List */}
+              {clients.length === 0 && !loading ?
+                <div className="text-center py-20 text-muted-foreground">
+                  <p>Nenhum cliente encontrado</p>
+                </div> :
 
-              <div className="flex flex-col gap-2 w-full">
-                    {sortedClients.map((client) => {
-                  const info = getClientBadgeInfo(client);
-                  return (
-                    <div
-                      key={client.id}
-                      className={`w-full rounded-lg p-4 flex items-center gap-4 transition-all duration-150 hover:opacity-90 cursor-pointer ${getCardStyle(info)}`}
-                      onClick={() => handleOpenModal(client)}>
-                      
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-card-foreground font-bold text-base uppercase tracking-wide truncate">
-                              {client.client_name}
-                            </h3>
-                            {latestEventsMap.get(client.id) && (
-                              <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                                {latestEventsMap.get(client.id)!.icon} {latestEventsMap.get(client.id)!.event_date} {latestEventsMap.get(client.id)!.description}
-                              </p>
-                            )}
-                          </div>
+                <div className="flex flex-col gap-2 w-full">
+                  {sortedClients.map((client) => {
+                    const info = getClientBadgeInfo(client);
+                    return (
+                      <div
+                        key={client.id}
+                        className={`w-full rounded-lg p-4 flex items-center gap-4 transition-all duration-150 hover:opacity-90 cursor-pointer ${getCardStyle(info)}`}
+                        onClick={() => handleOpenModal(client)}>
 
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {info.overdueDays > 0 &&
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${info.isBlocked ? 'bg-red-500 text-white' : info.isOverdue ? 'bg-yellow-500 text-black' : 'bg-green-500 text-white'}`}>
-                                {info.overdueDays}d
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-card-foreground font-bold text-base uppercase tracking-wide truncate">
+                            {client.client_name}
+                          </h3>
+                          {latestEventsMap.get(client.id) && (
+                            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                              {latestEventsMap.get(client.id)!.icon} {latestEventsMap.get(client.id)!.event_date} {latestEventsMap.get(client.id)!.description}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {info.overdueDays > 0 &&
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${info.isBlocked ? 'bg-red-500 text-white' : info.isOverdue ? 'bg-yellow-500 text-black' : 'bg-green-500 text-white'}`}>
+                              {info.overdueDays}d
+                            </div>
+                          }
+
+                          {info.isBlocked &&
+                            <>
+                              <div className="px-3 py-1 bg-red-500/20 text-red-400 text-xs rounded-full flex items-center gap-1 font-semibold border border-red-500/30">
+                                🔒
                               </div>
-                        }
-
-                            {info.isBlocked &&
-                        <>
-                                <div className="px-3 py-1 bg-red-500/20 text-red-400 text-xs rounded-full flex items-center gap-1 font-semibold border border-red-500/30">
-                                  🔒
-                                </div>
-                                {client.client_id && (
-                          onlineClients.has(client.client_id) ?
-                          <div className="px-2.5 py-1 text-xs rounded-full flex items-center gap-1 font-semibold border border-green-500/30 text-muted-foreground bg-emerald-500">
-                                      <Wifi size={11} />
-                                      ON
-                                    </div> :
-                          !onlineLoading ?
-                          <div className="px-2.5 py-1 text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border bg-red-500">
+                              {client.client_id && (
+                                onlineClients.has(client.client_id) ?
+                                  <div className="px-2.5 py-1 text-xs rounded-full flex items-center gap-1 font-semibold border border-green-500/30 text-muted-foreground bg-emerald-500">
+                                    <Wifi size={11} />
+                                    ON
+                                  </div> :
+                                  !onlineLoading ?
+                                    <div className="px-2.5 py-1 text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border bg-red-500">
                                       <WifiOff size={11} />
                                       OFF
                                     </div> :
-                          null)
+                                    null)
+                              }
+                            </>
                           }
-                              </>
-                        }
 
-                            {info.isInactive &&
-                        <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">
-                                Inativo
-                              </div>
-                        }
+                          {info.isInactive &&
+                            <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">
+                              Inativo
+                            </div>
+                          }
 
-                            {info.isCompleted &&
-                        <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">
-                                Finalizado
-                              </div>
-                        }
+                          {info.isCompleted &&
+                            <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">
+                              Finalizado
+                            </div>
+                          }
 
-                            <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenTimelineDialog(client);
-                          }}
-                          className="border-green-500/30 hover:bg-green-500/10 text-green-400 hover:text-green-300"
-                          title="Ver Timeline">
-                          
-                              <TrendingUp className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </div>);
-
-                })}
-                  </div>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenTimelineDialog(client);
+                            }}
+                            className="border-green-500/30 hover:bg-green-500/10 text-green-400 hover:text-green-300"
+                            title="Ver Timeline">
+                            <TrendingUp className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               }
-              </div>
-            </div>
-
-            {/* Right Column - Calendar (65%) */}
-            <div className="hidden lg:block flex-1 min-w-0">
-              <CalendarView
-                onClientClick={(name) => setSearchTerm(name)}
-                hideTitle
-                hideStats
-              />
             </div>
           </div>
+
+          {/* Right Column - Calendar (60%) */}
+          <div className="hidden lg:block flex-1 min-w-0">
+            <CalendarView
+              onClientClick={(name) => setFilters(prev => ({ ...prev, searchTerm: name }))}
+              hideTitle
+              hideStats
+            />
+          </div>
         </div>
+      </div>
 
       {/* New Client Modal */}
       <Dialog open={newClientModalOpen} onOpenChange={setNewClientModalOpen}>
@@ -654,8 +745,7 @@ const Clients = () => {
                 value={newClientData.client_name}
                 onChange={(e) => setNewClientData((prev) => ({ ...prev, client_name: e.target.value }))}
                 autoFocus
-                onKeyDown={(e) => {if (e.key === 'Enter') {e.preventDefault();handleCreateClient();}}} />
-              
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateClient(); } }} />
             </div>
             <div className="space-y-2">
               <label htmlFor="new-client-id" className="text-sm font-medium">ID do Cliente</label>
@@ -664,7 +754,6 @@ const Clients = () => {
                 placeholder="Ex: 00064"
                 value={newClientData.client_id}
                 onChange={(e) => setNewClientData((prev) => ({ ...prev, client_id: e.target.value }))} />
-              
             </div>
             <div className="space-y-2">
               <label htmlFor="new-client-date" className="text-sm font-medium">Data de Cadastro</label>
@@ -673,7 +762,6 @@ const Clients = () => {
                 type="date"
                 value={newClientData.start_date}
                 onChange={(e) => setNewClientData((prev) => ({ ...prev, start_date: e.target.value }))} />
-              
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -684,31 +772,28 @@ const Clients = () => {
       </Dialog>
 
       {selectedClient &&
-      <ClientDashboardModal
-        client={selectedClient}
-        isOpen={modalOpen}
-        onClose={() => {setModalOpen(false);setSelectedClient(null);}}
-        onSave={handleSaveClient} />
-
+        <ClientDashboardModal
+          client={selectedClient}
+          isOpen={modalOpen}
+          onClose={() => { setModalOpen(false); setSelectedClient(null); }}
+          onSave={handleSaveClient} />
       }
 
       {clientForTimeline &&
-      <ClientTimelineDialog
-        client={clientForTimeline}
-        isOpen={showClientTimelineDialog}
-        onClose={() => {
-          setShowClientTimelineDialog(false);
-          setClientForTimeline(null);
-          // Refresh latest events after closing timeline dialog
-          if (clients.length > 0) void loadLatestEvents(clients);
-        }}
-        onTimelineUpdated={() => {
-          if (clients.length > 0) void loadLatestEvents(clients);
-        }} />
-
+        <ClientTimelineDialog
+          client={clientForTimeline}
+          isOpen={showClientTimelineDialog}
+          onClose={() => {
+            setShowClientTimelineDialog(false);
+            setClientForTimeline(null);
+            if (clients.length > 0) void loadLatestEvents(clients);
+          }}
+          onTimelineUpdated={() => {
+            if (clients.length > 0) void loadLatestEvents(clients);
+          }} />
       }
-    </AppLayout>);
-
+    </AppLayout>
+  );
 };
 
 export default Clients;
