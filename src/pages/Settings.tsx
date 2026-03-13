@@ -9,6 +9,7 @@ import { TagsManagement } from '@/components/settings/TagsManagement';
 import { IconsManagement } from '@/components/settings/IconsManagement';
 
 import { HistorySettings } from '@/components/settings/HistorySettings';
+import { SystemChangelogSettings } from '@/components/settings/SystemChangelogSettings';
 import { ColorThemeSettings } from '@/components/settings/ColorThemeSettings';
 import { CollectionRulesSettings } from '@/components/settings/CollectionRulesSettings';
 import { IntegrationsSettings } from '@/components/settings/IntegrationsSettings';
@@ -108,7 +109,18 @@ const Settings = () => {
             )}
 
           <TabsContent value="history">
-            <HistorySettings />
+            <Tabs defaultValue="changelog" className="w-full">
+              <TabsList className="mb-6">
+                <TabsTrigger value="changelog">Log de Atualizações</TabsTrigger>
+                <TabsTrigger value="completed">Cobranças Finalizadas</TabsTrigger>
+              </TabsList>
+              <TabsContent value="changelog">
+                <SystemChangelogSettings />
+              </TabsContent>
+              <TabsContent value="completed">
+                <HistorySettings />
+              </TabsContent>
+            </Tabs>
           </TabsContent>
         </Tabs>
       </div>
