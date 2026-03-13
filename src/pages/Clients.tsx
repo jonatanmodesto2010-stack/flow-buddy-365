@@ -12,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { supabaseClient } from '@/lib/supabase-client';
 import { useToast } from '@/hooks/use-toast';
 import { useUserRole } from '@/hooks/useUserRole';
-import { calculateOverdueDays, type ClientTimeline, type GroupedClient } from '@/lib/client-utils';
+import { calculateOverdueDays, getClientBadgeInfo, getCardStyle, type ClientTimeline, type GroupedClient } from '@/lib/client-utils';
 import type { User } from '@supabase/supabase-js';
 import { ClientTimelineDialog } from '@/components/ClientTimelineDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -337,22 +337,7 @@ const Clients = () => {
     }
   };
 
-  const getClientBadgeInfo = (client: ClientTimeline) => {
-    const overdueDays = overdueDaysMap.get(client.id) || 0;
-    const isBlocked = !client.is_active && client.status !== 'archived' && client.status !== 'completed';
-    const isOverdue = client.is_active && client.status === 'active' && overdueDays > 0;
-    const isInactive = client.status === 'archived';
-    const isCompleted = client.status === 'completed';
-
-    return { overdueDays, isBlocked, isOverdue, isInactive, isCompleted };
-  };
-
-  const getCardStyle = (info: ReturnType<typeof getClientBadgeInfo>) => {
-    if (info.isBlocked) return 'bg-red-500/10 border border-red-500/30';
-    if (info.isOverdue) return 'bg-yellow-500/10 border border-yellow-500/30';
-    if (info.isInactive || info.isCompleted) return 'bg-muted border border-border opacity-70';
-    return 'bg-card border border-border';
-  };
+  const getClientInfo = (client: ClientTimeline) => getClientBadgeInfo(client, overdueDaysMap);
 
   if (roleLoading) {
     return (
@@ -495,7 +480,7 @@ const Clients = () => {
 
               <div className="flex flex-col gap-2 w-full">
                     {sortedClients.map((client) => {
-                  const info = getClientBadgeInfo(client);
+                  const info = getClientInfo(client);
                   const evt = latestEventsMap.get(client.id);
                   return (
                     <ClientCard
