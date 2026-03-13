@@ -162,31 +162,27 @@ export const EquipmentRetrievalWidget = () => {
         <>
           <div className="space-y-2">
             {pagedItems.map((os) => (
-              <div
+              <ClientCard
                 key={os.id}
+                title={os.cliente_nome}
+                subtitle={`${formatDate(os.data_abertura)} • OS #${os.id}`}
+                subtitleIcon="📦"
                 onClick={() => handleItemClick(os)}
-                className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/50 cursor-pointer transition-colors group"
-              >
-                <span className="text-xl flex-shrink-0">📦</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {os.cliente_nome}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDate(os.data_abertura)} • OS #{os.id}
-                  </p>
-                </div>
-                <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${getStatusClass(os.status)}`}>
-                  {os.status}
-                </Badge>
-                <button
-                  onClick={(e) => handleCopyId(e, os)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
-                  title="Copiar ID"
-                >
-                  <Copy size={12} className="text-muted-foreground" />
-                </button>
-              </div>
+                badges={
+                  <>
+                    <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${getStatusClass(os.status)}`}>
+                      {os.status}
+                    </Badge>
+                    <button
+                      onClick={(e) => handleCopyId(e, os)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
+                      title="Copiar ID"
+                    >
+                      <Copy size={12} className="text-muted-foreground" />
+                    </button>
+                  </>
+                }
+              />
             ))}
           </div>
 
