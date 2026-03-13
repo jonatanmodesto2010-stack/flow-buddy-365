@@ -481,7 +481,7 @@ const Clients = () => {
 
               <div className="flex flex-col gap-2 w-full">
                     {sortedClients.map((client) => {
-                  const info = getClientBadgeInfo(client);
+                  const info = getClientInfo(client);
                   const evt = latestEventsMap.get(client.id);
                   return (
                     <ClientCard
