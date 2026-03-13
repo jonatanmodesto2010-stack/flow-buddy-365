@@ -1067,6 +1067,87 @@ export type Database = {
         }
         Relationships: []
       }
+      system_changelog: {
+        Row: {
+          change_type: string
+          created_at: string | null
+          details: string | null
+          environment: string | null
+          error_notes: string | null
+          expected_impact: string | null
+          files_changed: string[] | null
+          id: string
+          is_rollback: boolean | null
+          module: string
+          organization_id: string
+          result: string | null
+          risk_level: string | null
+          rollback_of: string | null
+          status: string | null
+          summary: string
+          updated_at: string | null
+          user_id: string | null
+          version: string | null
+        }
+        Insert: {
+          change_type: string
+          created_at?: string | null
+          details?: string | null
+          environment?: string | null
+          error_notes?: string | null
+          expected_impact?: string | null
+          files_changed?: string[] | null
+          id?: string
+          is_rollback?: boolean | null
+          module: string
+          organization_id: string
+          result?: string | null
+          risk_level?: string | null
+          rollback_of?: string | null
+          status?: string | null
+          summary: string
+          updated_at?: string | null
+          user_id?: string | null
+          version?: string | null
+        }
+        Update: {
+          change_type?: string
+          created_at?: string | null
+          details?: string | null
+          environment?: string | null
+          error_notes?: string | null
+          expected_impact?: string | null
+          files_changed?: string[] | null
+          id?: string
+          is_rollback?: boolean | null
+          module?: string
+          organization_id?: string
+          result?: string | null
+          risk_level?: string | null
+          rollback_of?: string | null
+          status?: string | null
+          summary?: string
+          updated_at?: string | null
+          user_id?: string | null
+          version?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_changelog_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "system_changelog_rollback_of_fkey"
+            columns: ["rollback_of"]
+            isOneToOne: false
+            referencedRelation: "system_changelog"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tags: {
         Row: {
           color: string
