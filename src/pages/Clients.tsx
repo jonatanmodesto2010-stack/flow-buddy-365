@@ -148,9 +148,10 @@ const Clients = () => {
       setClients(data || []);
       setTotalCount(count || 0);
 
-      // Load overdue days in background for visible clients only
+      // Load overdue days + latest events in background for visible clients only
       if (data && data.length > 0) {
         loadOverdueDays(data);
+        loadLatestEvents(data);
         // Load online status for blocked clients
         const blockedClients = data.filter((c) => !c.is_active && c.status !== 'archived' && c.status !== 'completed');
         if (blockedClients.length > 0) {
@@ -161,6 +162,7 @@ const Clients = () => {
       } else {
         setOverdueDaysMap(new Map());
         setOnlineClients(new Set());
+        setLatestEventsMap(new Map());
       }
     } catch (error: any) {
       console.error('Error loading clients:', error);
