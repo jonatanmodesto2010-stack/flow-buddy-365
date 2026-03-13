@@ -103,7 +103,9 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
     filters.iconsFilter.length > 0,
   ].filter(Boolean).length;
 
-  const availableIcons = ['💬', '📅', '📄', '📞', '✅', '🤝', '⚠️', '🧰'];
+  const availableIcons = orgIcons.length > 0
+    ? orgIcons.map(i => i.icon)
+    : DEFAULT_ICONS.map(i => i.icon);
 
   return (
     <div className="space-y-4 mb-6">

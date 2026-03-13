@@ -2,28 +2,25 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Clock, MessageSquare, FileText, CheckCircle2, AlertCircle, Phone, Wrench } from 'lucide-react';
 
-const TimelineItem = ({ event, index, onEdit, onColorChange }) => {
-  const getIcon = () => {
-    switch (event.icon) {
-      case 'calendar':
-        return Calendar;
-      case 'note':
-        return FileText;
-      case 'check':
-        return CheckCircle2;
-      case 'message':
-        return MessageSquare;
-      case 'alert':
-        return AlertCircle;
-      case 'phone':
-        return Phone;
-      case 'wrench':
-        return Wrench;
-      default:
-        return FileText;
-    }
-  };
+// Map of legacy Lucide string keys to components
+const LUCIDE_MAP: Record<string, React.ElementType> = {
+  calendar: Calendar,
+  note: FileText,
+  check: CheckCircle2,
+  message: MessageSquare,
+  alert: AlertCircle,
+  phone: Phone,
+  wrench: Wrench,
+};
 
+const isEmoji = (str: string) => {
+  // If it's a known Lucide key, it's not an emoji
+  if (LUCIDE_MAP[str]) return false;
+  // Otherwise treat as emoji (any non-ascii or multi-char string that isn't a known key)
+  return true;
+};
+
+const TimelineItem = ({ event, index, onEdit, onColorChange }) => {
   const getStatusColor = () => {
     switch (event.color) {
       case 'green':
@@ -50,8 +47,16 @@ const TimelineItem = ({ event, index, onEdit, onColorChange }) => {
     }
   };
 
-  const Icon = getIcon();
   const isRightSide = event.color === 'green';
+
+  const renderIcon = () => {
+    const iconValue = event.icon || '💬';
+    if (!isEmoji(iconValue)) {
+      const LucideIcon = LUCIDE_MAP[iconValue] || FileText;
+      return <LucideIcon className="h-4 w-4 text-white" />;
+    }
+    return <span className="text-sm leading-none">{iconValue}</span>;
+  };
 
   const Card = () => (
     <motion.div
@@ -86,14 +91,14 @@ const TimelineItem = ({ event, index, onEdit, onColorChange }) => {
     >
       {!isRightSide && <Card />}
       {!isRightSide && <div className="w-[calc(50%-2.5rem)]" />}
-      
+
       <div
         onClick={onColorChange}
         className={`absolute left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-gradient-to-br ${getStatusColor()} flex items-center justify-center shadow-lg z-10 cursor-pointer`}
       >
-        <Icon className="h-4 w-4 text-white" />
+        {renderIcon()}
       </div>
-      
+
       {isRightSide && <div className="w-[calc(50%-2.5rem)]" />}
       {isRightSide && <Card />}
     </motion.div>
