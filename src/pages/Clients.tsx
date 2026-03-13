@@ -16,6 +16,7 @@ import { calculateOverdueDays, type ClientTimeline, type GroupedClient } from '@
 import type { User } from '@supabase/supabase-js';
 import { ClientTimelineDialog } from '@/components/ClientTimelineDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ClientCard } from '@/components/ClientCard';
 
 const ITEMS_PER_PAGE = 30;
 
