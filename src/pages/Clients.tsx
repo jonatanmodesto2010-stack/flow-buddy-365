@@ -505,6 +505,16 @@ const Clients = () => {
                             <h3 className="text-card-foreground font-bold text-base uppercase tracking-wide truncate">
                               {client.client_name}
                             </h3>
+                            {latestEventsMap.has(client.id) && (() => {
+                              const evt = latestEventsMap.get(client.id)!;
+                              return (
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  <span className="mr-1">{evt.icon}</span>
+                                  {evt.description}
+                                  {evt.event_date && <span className="ml-2 opacity-70">{evt.event_date}</span>}
+                                </p>
+                              );
+                            })()}
                           </div>
 
                           <div className="flex items-center gap-2 flex-shrink-0">
