@@ -1,1 +1,4 @@
 project_id = "oouoxpvshlwacelioelp"
+
+[functions.create-or-add-user-to-organization]
+verify_jwt = false

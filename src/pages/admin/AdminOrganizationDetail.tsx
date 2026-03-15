@@ -77,18 +77,20 @@ const AdminOrganizationDetail = () => {
     e.preventDefault();
     setAddingUser(true);
 
-    const { data, error } = await supabase.functions.invoke('admin-create-organization', {
+    const { data, error } = await supabase.functions.invoke('create-or-add-user-to-organization', {
       body: {
-        action: 'add_user_to_org',
+        email: newUser.email,
+        password: newUser.password || undefined,
+        full_name: newUser.full_name,
         organization_id: id,
-        ...newUser,
+        role: newUser.role,
       },
     });
 
     if (error || data?.error) {
       toast({ title: 'Erro', description: error?.message || data?.error, variant: 'destructive' });
     } else {
-      toast({ title: 'Usuário adicionado!' });
+      toast({ title: data?.created ? 'Usuário criado!' : 'Usuário vinculado!', description: data?.message });
       setAddUserOpen(false);
       setNewUser({ email: '', password: '', full_name: '', role: 'member' });
       fetchData();
