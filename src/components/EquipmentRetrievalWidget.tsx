@@ -73,8 +73,8 @@ export const EquipmentRetrievalWidget = () => {
     }
 
     try {
-      const { data: integration } = await supabase
-        .from('organization_integrations')
+      const { data: integration } = await (supabaseClient as any)
+        .from('organization_integrations_public')
         .select('ixc_os_retirada_assunto_id')
         .eq('organization_id', organizationId)
         .eq('integration_type', 'ixc')
