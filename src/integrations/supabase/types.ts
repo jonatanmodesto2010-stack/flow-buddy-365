@@ -1477,6 +1477,7 @@ export type Database = {
           user_role_id: string
         }[]
       }
+      get_user_id_by_email: { Args: { _email: string }; Returns: string }
       get_user_organization: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
