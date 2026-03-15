@@ -74,13 +74,7 @@ export const ClientTimelineDialog = ({
     try {
       const { data, error } = await supabase
         .from('client_timelines')
-        .select(`
-          updated_at,
-          user_id,
-          profiles:user_id (
-            full_name
-          )
-        `)
+        .select('updated_at, user_id')
         .eq('id', client.id)
         .single();
 
@@ -88,7 +82,14 @@ export const ClientTimelineDialog = ({
 
       if (data) {
         setLastUpdatedAt(data.updated_at);
-        setLastUpdatedBy((data.profiles as any)?.full_name || 'Usuário desconhecido');
+
+        if (data.user_id) {
+          const { data: nameData } = await supabase
+            .rpc('get_user_display_name', { _user_id: data.user_id });
+          setLastUpdatedBy(nameData || 'Sistema');
+        } else {
+          setLastUpdatedBy('Sistema');
+        }
       }
     } catch (error) {
       console.error('Erro ao carregar informações de auditoria:', error);
