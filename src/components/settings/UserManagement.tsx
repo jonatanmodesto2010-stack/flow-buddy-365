@@ -218,6 +218,20 @@ export const UserManagement = () => {
         />
       )}
 
+      {userToResetPassword && organizationId && (
+        <ResetPasswordDialog
+          isOpen={isResetPasswordOpen}
+          onClose={() => {
+            setIsResetPasswordOpen(false);
+            setUserToResetPassword(null);
+          }}
+          targetUserId={userToResetPassword.id}
+          targetUserName={userToResetPassword.full_name}
+          organizationId={organizationId}
+        />
+      )}
+
+
       <AlertDialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
