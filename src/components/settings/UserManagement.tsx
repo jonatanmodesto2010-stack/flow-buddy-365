@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Pencil } from 'lucide-react';
+import { Plus, Trash2, Pencil, KeyRound } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AddUserDialog } from './AddUserDialog';
 import { EditUserDialog } from './EditUserDialog';
+import { ResetPasswordDialog } from './ResetPasswordDialog';
 import { useUserRole } from '@/hooks/useUserRole';
 import {
   AlertDialog,
@@ -33,7 +34,9 @@ export const UserManagement = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<UserWithRole | null>(null);
+  const [userToResetPassword, setUserToResetPassword] = useState<UserWithRole | null>(null);
   const [userToDelete, setUserToDelete] = useState<UserWithRole | null>(null);
   const { toast } = useToast();
   const { organizationId, isOwner } = useUserRole();
@@ -155,6 +158,7 @@ export const UserManagement = () => {
                           <Button
                             variant="ghost"
                             size="icon"
+                            title="Editar função"
                             onClick={() => {
                               setUserToEdit(user);
                               setIsEditDialogOpen(true);
@@ -166,6 +170,19 @@ export const UserManagement = () => {
                           <Button
                             variant="ghost"
                             size="icon"
+                            title="Resetar senha"
+                            onClick={() => {
+                              setUserToResetPassword(user);
+                              setIsResetPasswordOpen(true);
+                            }}
+                            disabled={!isOwner && user.role === 'admin'}
+                          >
+                            <KeyRound className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Remover usuário"
                             onClick={() => setUserToDelete(user)}
                             disabled={!isOwner && user.role === 'admin'}
                           >
@@ -200,6 +217,20 @@ export const UserManagement = () => {
           user={userToEdit}
         />
       )}
+
+      {userToResetPassword && organizationId && (
+        <ResetPasswordDialog
+          isOpen={isResetPasswordOpen}
+          onClose={() => {
+            setIsResetPasswordOpen(false);
+            setUserToResetPassword(null);
+          }}
+          targetUserId={userToResetPassword.id}
+          targetUserName={userToResetPassword.full_name}
+          organizationId={organizationId}
+        />
+      )}
+
 
       <AlertDialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
         <AlertDialogContent>
