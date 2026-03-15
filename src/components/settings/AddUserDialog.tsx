@@ -12,11 +12,10 @@ import { useToast } from '@/hooks/use-toast';
 
 const addUserSchema = z.object({
   email: z.string().email('Email inválido'),
-  password: z
-    .string()
-    .min(8, 'Senha deve ter no mínimo 8 caracteres')
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, 
-      'Senha deve conter letras maiúsculas, minúsculas e números'),
+  password: z.string().optional().refine(
+    (val) => !val || (val.length >= 8 && /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(val)),
+    'Senha deve ter no mínimo 8 caracteres com letras maiúsculas, minúsculas e números'
+  ),
   fullName: z.string().trim().min(1, 'Nome é obrigatório').max(100),
   role: z.enum(['admin', 'member', 'viewer']),
 });
@@ -50,33 +49,6 @@ export const AddUserDialog = ({ isOpen, onClose, onSuccess, organizationId }: Ad
 
   const selectedRole = watch('role');
 
-  // Função auxiliar para aguardar profile ser criado com retry e backoff exponencial
-  const waitForProfile = async (userId: string, maxAttempts = 10) => {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const delay = Math.min(500 * Math.pow(2, attempt), 5000); // Max 5s por tentativa
-      
-      await new Promise(resolve => setTimeout(resolve, delay));
-      
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('id, organization_id')
-        .eq('id', userId)
-        .maybeSingle();
-      
-      if (error && !error.message.includes('not found')) {
-        throw error; // Erro real, não retry
-      }
-      
-      if (profile) {
-        return profile; // Sucesso!
-      }
-      
-      console.log(`Aguardando profile ser criado (tentativa ${attempt + 1}/${maxAttempts})...`);
-    }
-    
-    throw new Error('Timeout: Profile não foi criado após múltiplas tentativas. Por favor, tente novamente.');
-  };
-
   const onSubmit = async (data: AddUserFormData) => {
     if (!organizationId) {
       toast({
@@ -89,58 +61,43 @@ export const AddUserDialog = ({ isOpen, onClose, onSuccess, organizationId }: Ad
 
     setIsLoading(true);
     try {
-      // Verificar se usuário já existe
-      const { data: existingUser } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', (await supabase.auth.getUser()).data.user?.id || '');
-
-      // Criar usuário com metadados indicando que foi criado por admin
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          data: {
+      const { data: result, error } = await supabase.functions.invoke(
+        'create-or-add-user-to-organization',
+        {
+          body: {
+            email: data.email,
+            password: data.password || undefined,
             full_name: data.fullName,
-            created_by_admin: true,
             organization_id: organizationId,
             role: data.role,
           },
-          emailRedirectTo: undefined,
-        },
-      });
-
-      if (authError) {
-        // Tratar erro de email já cadastrado
-        if (authError.message.includes('already registered') || authError.message.includes('already exists')) {
-          throw new Error('Este email já está cadastrado. Use outro email.');
         }
-        throw authError;
-      }
-      
-      if (!authData.user) throw new Error('Falha ao criar usuário');
+      );
 
-      // Se o usuário já existia (repeated signup), não continuar
-      if (authData.user.identities && authData.user.identities.length === 0) {
-        throw new Error('Este email já está cadastrado. Use outro email.');
+      if (error) {
+        throw new Error(error.message || 'Erro ao processar requisição');
       }
 
-      // Aguardar profile e role serem criados pelo trigger
-      await waitForProfile(authData.user.id);
+      if (result?.error) {
+        throw new Error(result.error);
+      }
 
+      const isNewUser = result?.created;
       toast({
-        title: 'Usuário criado',
-        description: 'O novo usuário foi adicionado à organização.',
+        title: isNewUser ? 'Usuário criado' : 'Usuário vinculado',
+        description: result?.message || (isNewUser
+          ? 'O novo usuário foi adicionado à organização.'
+          : 'O usuário existente foi vinculado à organização.'),
       });
 
       reset();
       onSuccess();
       onClose();
     } catch (error: any) {
-      console.error('Error creating user:', error);
+      console.error('Error creating/linking user:', error);
       toast({
         title: 'Erro',
-        description: error.message || 'Não foi possível criar o usuário.',
+        description: error.message || 'Não foi possível criar/vincular o usuário.',
         variant: 'destructive',
       });
     } finally {
@@ -154,7 +111,7 @@ export const AddUserDialog = ({ isOpen, onClose, onSuccess, organizationId }: Ad
         <DialogHeader>
           <DialogTitle>Adicionar Novo Usuário</DialogTitle>
           <DialogDescription>
-            Crie uma nova conta de usuário para a organização
+            Crie uma nova conta ou vincule um usuário existente à organização
           </DialogDescription>
         </DialogHeader>
 
@@ -178,8 +135,11 @@ export const AddUserDialog = ({ isOpen, onClose, onSuccess, organizationId }: Ad
               id="password"
               type="password"
               {...register('password')}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Obrigatório apenas para novos usuários"
             />
+            <p className="text-xs text-muted-foreground">
+              Deixe em branco se o usuário já possui conta no sistema
+            </p>
             {errors.password && (
               <p className="text-sm text-destructive">{errors.password.message}</p>
             )}
@@ -219,7 +179,7 @@ export const AddUserDialog = ({ isOpen, onClose, onSuccess, organizationId }: Ad
               Cancelar
             </Button>
             <Button type="submit" disabled={isLoading}>
-              {isLoading ? 'Criando...' : 'Criar Usuário'}
+              {isLoading ? 'Processando...' : 'Adicionar Usuário'}
             </Button>
           </div>
         </form>
