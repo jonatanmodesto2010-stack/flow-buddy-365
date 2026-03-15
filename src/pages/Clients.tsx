@@ -580,7 +580,7 @@ const Clients = () => {
       <ClientDashboardModal
         client={selectedClient}
         isOpen={modalOpen}
-        onClose={() => {setModalOpen(false);setSelectedClient(null);}}
+        onClose={() => {setModalOpen(false);setSelectedClient(null);loadLatestEvents(clients);}}
         onSave={handleSaveClient} />
 
       }
