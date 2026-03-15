@@ -486,9 +486,8 @@ const Clients = () => {
                     <ClientCard
                       key={client.id}
                       title={client.client_name}
-                      subtitle={evt?.description}
+                      subtitle={evt ? `${evt.event_date}  ${evt.description}` : undefined}
                       subtitleIcon={evt?.icon}
-                      subtitleSuffix={evt?.event_date}
                       cardStyle={getCardStyle(info)}
                       onClick={() => handleOpenModal(client)}
                       badges={<>
