@@ -21,30 +21,30 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // --- Authenticate caller ---
+    // --- Authenticate caller using getUser ---
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
+      console.log("[LOG] No valid Authorization header");
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
-
-    const callerClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } =
-      await callerClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+    const { data: { user: callerUser }, error: authError } =
+      await adminClient.auth.getUser(token);
+    if (authError || !callerUser) {
+      console.log("[LOG] Auth failed:", authError?.message);
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
-    const callerId = claimsData.claims.sub as string;
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const callerId = callerUser.id;
+    console.log("[LOG] Caller authenticated:", callerId);
 
     // --- Parse & validate body ---
     const { email, password, full_name, organization_id, role } = await req.json();
+    console.log("[LOG] Body parsed:", { email, organization_id, role, has_password: !!password });
 
     if (!email || !organization_id || !role) {
       return jsonResponse({ error: "Campos obrigatórios: email, organization_id, role" }, 400);
@@ -57,6 +57,8 @@ Deno.serve(async (req) => {
       .eq("user_id", callerId)
       .maybeSingle();
 
+    console.log("[LOG] Is super admin:", !!isSuperAdmin);
+
     if (!isSuperAdmin) {
       const { data: callerRole } = await adminClient
         .from("user_roles")
@@ -64,6 +66,8 @@ Deno.serve(async (req) => {
         .eq("user_id", callerId)
         .eq("organization_id", organization_id)
         .maybeSingle();
+
+      console.log("[LOG] Caller role in org:", callerRole?.role);
 
       if (!callerRole || !["owner", "admin"].includes(callerRole.role)) {
         return jsonResponse(
@@ -77,6 +81,8 @@ Deno.serve(async (req) => {
     const { data: canAdd } = await adminClient.rpc("check_org_user_limit", {
       _org_id: organization_id,
     });
+    console.log("[LOG] Can add user (limit check):", canAdd);
+
     if (!canAdd) {
       return jsonResponse(
         { error: "Limite de usuários atingido para esta organização" },
@@ -84,11 +90,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    // --- Look up existing user by email (direct auth.users query via RPC) ---
-    const { data: existingUserId } = await adminClient.rpc(
+    // --- Look up existing user by email ---
+    const { data: existingUserId, error: lookupError } = await adminClient.rpc(
       "get_user_id_by_email",
       { _email: email }
     );
+    console.log("[LOG] Existing user lookup:", { existingUserId, lookupError: lookupError?.message });
 
     // =============================================
     // FLOW A: User does NOT exist → create + link
@@ -101,7 +108,8 @@ Deno.serve(async (req) => {
         );
       }
 
-      const { data: authData, error: authError } =
+      console.log("[LOG] Flow A: Creating new user...");
+      const { data: authData, error: createError } =
         await adminClient.auth.admin.createUser({
           email,
           password,
@@ -114,14 +122,17 @@ Deno.serve(async (req) => {
           },
         });
 
-      if (authError) {
-        return jsonResponse({ error: authError.message }, 500);
+      if (createError) {
+        console.log("[LOG] createUser error:", createError.message);
+        return jsonResponse({ error: createError.message }, 500);
       }
 
       const newUserId = authData.user.id;
+      console.log("[LOG] User created:", newUserId);
 
       // Insert profile + user_role with rollback on failure
       try {
+        console.log("[LOG] Upserting profile...");
         const { error: profileError } = await adminClient
           .from("profiles")
           .upsert(
@@ -129,13 +140,16 @@ Deno.serve(async (req) => {
             { onConflict: "id" }
           );
         if (profileError) throw profileError;
+        console.log("[LOG] Profile upserted OK");
 
+        console.log("[LOG] Inserting user_role...");
         const { error: roleError } = await adminClient
           .from("user_roles")
           .insert({ user_id: newUserId, organization_id, role });
         if (roleError) throw roleError;
+        console.log("[LOG] User role inserted OK");
       } catch (dbError: any) {
-        // Rollback: delete orphan user
+        console.log("[LOG] DB error, rolling back user:", dbError.message);
         await adminClient.auth.admin.deleteUser(newUserId);
         return jsonResponse(
           { error: `Falha ao vincular usuário: ${dbError.message}. Usuário não foi criado.` },
@@ -154,12 +168,15 @@ Deno.serve(async (req) => {
     // =============================================
     // FLOW B: User EXISTS → check membership, link
     // =============================================
+    console.log("[LOG] Flow B: User exists, checking membership...");
     const { data: existingRole } = await adminClient
       .from("user_roles")
       .select("id")
       .eq("user_id", existingUserId)
       .eq("organization_id", organization_id)
       .maybeSingle();
+
+    console.log("[LOG] Existing role in org:", existingRole);
 
     if (existingRole) {
       return jsonResponse({
@@ -171,20 +188,24 @@ Deno.serve(async (req) => {
     }
 
     // Link user to org
+    console.log("[LOG] Linking existing user to org...");
     const { error: linkError } = await adminClient
       .from("user_roles")
       .insert({ user_id: existingUserId, organization_id, role });
 
     if (linkError) {
+      console.log("[LOG] Link error:", linkError.message);
       return jsonResponse({ error: `Falha ao vincular: ${linkError.message}` }, 500);
     }
 
     // Update profile organization_id
+    console.log("[LOG] Updating profile org...");
     await adminClient
       .from("profiles")
       .update({ organization_id })
       .eq("id", existingUserId);
 
+    console.log("[LOG] Done - user linked successfully");
     return jsonResponse({
       created: false,
       linked: true,
@@ -192,6 +213,7 @@ Deno.serve(async (req) => {
       message: "Usuário existente vinculado à organização com sucesso",
     });
   } catch (error: any) {
+    console.log("[LOG] Unexpected error:", error.message);
     return jsonResponse({ error: error.message }, 500);
   }
 });
