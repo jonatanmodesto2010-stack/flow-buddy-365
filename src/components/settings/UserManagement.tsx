@@ -158,6 +158,7 @@ export const UserManagement = () => {
                           <Button
                             variant="ghost"
                             size="icon"
+                            title="Editar função"
                             onClick={() => {
                               setUserToEdit(user);
                               setIsEditDialogOpen(true);
@@ -169,6 +170,19 @@ export const UserManagement = () => {
                           <Button
                             variant="ghost"
                             size="icon"
+                            title="Resetar senha"
+                            onClick={() => {
+                              setUserToResetPassword(user);
+                              setIsResetPasswordOpen(true);
+                            }}
+                            disabled={!isOwner && user.role === 'admin'}
+                          >
+                            <KeyRound className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Remover usuário"
                             onClick={() => setUserToDelete(user)}
                             disabled={!isOwner && user.role === 'admin'}
                           >
