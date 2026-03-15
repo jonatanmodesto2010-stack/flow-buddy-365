@@ -187,6 +187,20 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Ensure profile exists before linking
+    console.log("[LOG] Ensuring profile exists for existing user...");
+    const { error: ensureProfileError } = await adminClient
+      .from("profiles")
+      .upsert(
+        { id: existingUserId, full_name: full_name || "Usuário", organization_id },
+        { onConflict: "id" }
+      );
+    if (ensureProfileError) {
+      console.log("[LOG] Failed to ensure profile:", ensureProfileError.message);
+      return jsonResponse({ error: `Failed to create profile: ${ensureProfileError.message}` }, 500);
+    }
+    console.log("[LOG] Profile ensured OK");
+
     // Link user to org
     console.log("[LOG] Linking existing user to org...");
     const { error: linkError } = await adminClient
