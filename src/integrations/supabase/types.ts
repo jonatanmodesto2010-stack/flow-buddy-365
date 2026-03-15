@@ -1364,6 +1364,50 @@ export type Database = {
           },
         ]
       }
+      organization_integrations_public: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          integration_type: string | null
+          is_active: boolean | null
+          ixc_os_retirada_assunto_id: string | null
+          last_boleto_sync_at: string | null
+          last_sync_at: string | null
+          organization_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          integration_type?: string | null
+          is_active?: boolean | null
+          ixc_os_retirada_assunto_id?: string | null
+          last_boleto_sync_at?: string | null
+          last_sync_at?: string | null
+          organization_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          integration_type?: string | null
+          is_active?: boolean | null
+          ixc_os_retirada_assunto_id?: string | null
+          last_boleto_sync_at?: string | null
+          last_sync_at?: string | null
+          organization_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_integrations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       unique_client_timelines: {
         Row: {
           boleto_value: number | null
