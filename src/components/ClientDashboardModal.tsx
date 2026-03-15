@@ -196,7 +196,6 @@ export const ClientDashboardModal = ({
   };
 
   const loadLastUpdatedBy = async () => {
-    console.log('[ClientDashboardModal] loadLastUpdatedBy - iniciando');
     try {
       const { data: timeline, error: timelineError } = await supabase
         .from('client_timelines')
@@ -204,32 +203,16 @@ export const ClientDashboardModal = ({
         .eq('id', client.id)
         .single();
 
-      if (timelineError) {
-        console.error('[ClientDashboardModal] Erro ao buscar timeline:', timelineError);
-        throw timelineError;
-      }
-
-      console.log('[ClientDashboardModal] timeline encontrada:', timeline);
+      if (timelineError) throw timelineError;
 
       if (timeline) {
         setLastUpdatedAt(timeline.updated_at);
 
         if (timeline.user_id) {
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', timeline.user_id)
-            .single();
-
-          if (!profileError && profile) {
-            console.log('[ClientDashboardModal] profile encontrado:', profile);
-            setLastUpdatedBy(profile.full_name || 'Usuário');
-          } else {
-            console.log('[ClientDashboardModal] profile não encontrado ou erro:', profileError);
-            setLastUpdatedBy('Sistema');
-          }
+          const { data: nameData } = await supabase
+            .rpc('get_user_display_name', { _user_id: timeline.user_id });
+          setLastUpdatedBy(nameData || 'Sistema');
         } else {
-          console.log('[ClientDashboardModal] user_id não existe na timeline');
           setLastUpdatedBy('Sistema');
         }
       }
