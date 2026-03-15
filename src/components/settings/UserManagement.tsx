@@ -8,6 +8,7 @@ import { Plus, Trash2, Pencil, KeyRound } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AddUserDialog } from './AddUserDialog';
 import { EditUserDialog } from './EditUserDialog';
+import { ResetPasswordDialog } from './ResetPasswordDialog';
 import { useUserRole } from '@/hooks/useUserRole';
 import {
   AlertDialog,
