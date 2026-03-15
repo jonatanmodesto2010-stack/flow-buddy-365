@@ -589,7 +589,7 @@ const Clients = () => {
       <ClientTimelineDialog
         client={clientForTimeline}
         isOpen={showClientTimelineDialog}
-        onClose={() => {setShowClientTimelineDialog(false);setClientForTimeline(null);}} />
+        onClose={() => {setShowClientTimelineDialog(false);setClientForTimeline(null);loadLatestEvents(clients);}} />
 
       }
     </AppLayout>);
