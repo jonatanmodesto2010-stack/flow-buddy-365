@@ -34,7 +34,9 @@ export const UserManagement = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<UserWithRole | null>(null);
+  const [userToResetPassword, setUserToResetPassword] = useState<UserWithRole | null>(null);
   const [userToDelete, setUserToDelete] = useState<UserWithRole | null>(null);
   const { toast } = useToast();
   const { organizationId, isOwner } = useUserRole();
