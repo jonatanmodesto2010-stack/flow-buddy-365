@@ -17,6 +17,8 @@ import type { User } from '@supabase/supabase-js';
 import { ClientTimelineDialog } from '@/components/ClientTimelineDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ClientCard } from '@/components/ClientCard';
+import { OverdueBadge } from '@/components/OverdueBadge';
+import { useCollectionStatusRules } from '@/hooks/useCollectionStatusRules';
 
 const ITEMS_PER_PAGE = 30;
 
