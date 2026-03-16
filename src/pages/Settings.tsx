@@ -102,6 +102,9 @@ const Settings = () => {
                 </TabsContent>
                 <TabsContent value="collection">
                   <CollectionRulesSettings />
+                  <div className="mt-8 pt-8 border-t border-border">
+                    <BadgeRulesSettings />
+                  </div>
                 </TabsContent>
                 <TabsContent value="integrations">
                   <IntegrationsSettings />
