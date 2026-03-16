@@ -497,7 +497,7 @@ const Clients = () => {
                           </div>
                         }
                         {info.isBlocked && <>
-                          <div className="px-3 py-1 text-xs rounded-full flex items-center gap-1 font-semibold border border-[#ef4343]/0 bg-[#ef4343]/0 text-[#f87272]/0">​</div>
+                          
                           {client.client_id && (
                           onlineClients.has(client.client_id) ?
                           <div className="px-2.5 py-1 text-xs rounded-full flex items-center gap-1 font-semibold border border-green-500/30 text-muted-foreground bg-emerald-500"><Wifi size={11} /> ON</div> :
