@@ -495,9 +495,7 @@ const Clients = () => {
                       onClick={() => handleOpenModal(client)}
                       badges={<>
                         {info.overdueDays > 0 &&
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${info.isBlocked ? 'bg-red-500 text-white' : info.isOverdue ? 'bg-yellow-500 text-black' : 'bg-green-500 text-white'}`}>
-                            {info.overdueDays}d
-                          </div>
+                          <OverdueBadge overdueDays={info.overdueDays} rules={statusRules} />
                         }
                         {info.isBlocked && <>
                           
