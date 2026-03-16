@@ -29,7 +29,7 @@ const Clients = () => {
   const [overdueDaysMap, setOverdueDaysMap] = useState<Map<string, number>>(new Map());
   const [onlineClients, setOnlineClients] = useState<Set<string>>(new Set());
   const [onlineLoading, setOnlineLoading] = useState(false);
-  const [latestEventsMap, setLatestEventsMap] = useState<Map<string, { icon: string; description: string; event_date: string }>>(new Map());
+  const [latestEventsMap, setLatestEventsMap] = useState<Map<string, {icon: string;description: string;event_date: string;}>>(new Map());
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [overdueDaysLoading, setOverdueDaysLoading] = useState(false);
@@ -233,12 +233,12 @@ const Clients = () => {
   const loadLatestEvents = async (timelines: ClientTimeline[]) => {
     try {
       const timelineIds = timelines.map((t) => t.id);
-      const { data, error } = await (supabaseClient as any)
-        .from('latest_client_events')
-        .select('timeline_id, icon, description, event_date')
-        .in('timeline_id', timelineIds);
+      const { data, error } = await (supabaseClient as any).
+      from('latest_client_events').
+      select('timeline_id, icon, description, event_date').
+      in('timeline_id', timelineIds);
       if (error) throw error;
-      const map = new Map<string, { icon: string; description: string; event_date: string }>();
+      const map = new Map<string, {icon: string;description: string;event_date: string;}>();
       for (const e of data || []) {
         if (e.timeline_id) {
           map.set(e.timeline_id, { icon: e.icon || '💬', description: e.description || '', event_date: e.event_date || '' });
@@ -347,13 +347,13 @@ const Clients = () => {
             <div className="h-9 w-48 bg-muted animate-pulse rounded mb-6" />
             <div className="flex flex-col gap-3">
               {[1, 2, 3, 4].map((i) =>
-                <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
+              <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
               )}
             </div>
           </div>
         </div>
-      </AppLayout>
-    );
+      </AppLayout>);
+
   }
 
   if (!organizationId) {
@@ -368,8 +368,8 @@ const Clients = () => {
             </p>
           </div>
         </div>
-      </AppLayout>
-    );
+      </AppLayout>);
+
   }
 
   if (loading && clients.length === 0) {
@@ -380,13 +380,13 @@ const Clients = () => {
             <div className="h-9 w-48 bg-muted animate-pulse rounded mb-6" />
             <div className="flex flex-col gap-3">
               {[1, 2, 3, 4].map((i) =>
-                <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
+              <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
               )}
             </div>
           </div>
         </div>
-      </AppLayout>
-    );
+      </AppLayout>);
+
   }
 
   return (
@@ -491,29 +491,29 @@ const Clients = () => {
                       cardStyle={getCardStyle(info)}
                       onClick={() => handleOpenModal(client)}
                       badges={<>
-                        {info.overdueDays > 0 && (
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${info.isBlocked ? 'bg-red-500 text-white' : info.isOverdue ? 'bg-yellow-500 text-black' : 'bg-green-500 text-white'}`}>
+                        {info.overdueDays > 0 &&
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${info.isBlocked ? 'bg-red-500 text-white' : info.isOverdue ? 'bg-yellow-500 text-black' : 'bg-green-500 text-white'}`}>
                             {info.overdueDays}d
                           </div>
-                        )}
-                        {info.isBlocked && (<>
+                        }
+                        {info.isBlocked && <>
                           <div className="px-3 py-1 bg-red-500/20 text-red-400 text-xs rounded-full flex items-center gap-1 font-semibold border border-red-500/30">🔒</div>
                           {client.client_id && (
-                            onlineClients.has(client.client_id) ? (
-                              <div className="px-2.5 py-1 text-xs rounded-full flex items-center gap-1 font-semibold border border-green-500/30 text-muted-foreground bg-emerald-500"><Wifi size={11} /> ON</div>
-                            ) : !onlineLoading ? (
-                              <div className="px-2.5 py-1 text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border bg-red-500"><WifiOff size={11} /> OFF</div>
-                            ) : null
-                          )}
-                        </>)}
+                          onlineClients.has(client.client_id) ?
+                          <div className="px-2.5 py-1 text-xs rounded-full flex items-center gap-1 font-semibold border border-green-500/30 text-muted-foreground bg-emerald-500"><Wifi size={11} /> ON</div> :
+                          !onlineLoading ?
+                          <div className="px-2.5 py-1 text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border bg-red-500"><WifiOff size={11} /> OFF</div> :
+                          null)
+                          }
+                        </>}
                         {info.isInactive && <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">Inativo</div>}
                         {info.isCompleted && <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">Finalizado</div>}
-                        <Button variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); handleOpenTimelineDialog(client); }} className="border-green-500/30 hover:bg-green-500/10 text-green-400 hover:text-green-300" title="Ver Timeline">
+                        <Button variant="outline" size="icon" onClick={(e) => {e.stopPropagation();handleOpenTimelineDialog(client);}} className="border-green-500/30 hover:bg-green-500/10 text-green-400 hover:text-green-300" title="Ver Timeline">
                           <TrendingUp className="w-4 h-4" />
                         </Button>
-                      </>}
-                    />
-                  );
+                      </>} className="py-[40px]" />);
+
+
                 })}
                   </div>
               }
@@ -523,10 +523,10 @@ const Clients = () => {
             {/* Right Column - Calendar (65%) */}
             <div className="hidden lg:block flex-1 min-w-0">
               <CalendarView
-                onClientClick={(name) => setSearchTerm(name)}
-                hideTitle
-                hideStats
-              />
+              onClientClick={(name) => setSearchTerm(name)}
+              hideTitle
+              hideStats />
+            
             </div>
           </div>
         </div>
