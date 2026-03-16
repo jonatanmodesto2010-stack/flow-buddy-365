@@ -512,7 +512,7 @@ const Clients = () => {
                         <Button variant="outline" size="icon" onClick={(e) => {e.stopPropagation();handleOpenTimelineDialog(client);}} className="border-green-500/30 hover:bg-green-500/10 text-green-400 hover:text-green-300" title="Ver Timeline">
                           <TrendingUp className="w-4 h-4" />
                         </Button>
-                      </>} className="py-[40px]" />);
+                      </>} />);
 
 
                 })}
