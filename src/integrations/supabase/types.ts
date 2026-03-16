@@ -532,6 +532,56 @@ export type Database = {
           },
         ]
       }
+      collection_status_rules: {
+        Row: {
+          bg_color: string
+          created_at: string | null
+          id: string
+          is_active: boolean
+          label: string
+          max_days: number | null
+          min_days: number
+          organization_id: string
+          sort_order: number
+          text_color: string
+          updated_at: string | null
+        }
+        Insert: {
+          bg_color?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          max_days?: number | null
+          min_days: number
+          organization_id: string
+          sort_order?: number
+          text_color?: string
+          updated_at?: string | null
+        }
+        Update: {
+          bg_color?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          max_days?: number | null
+          min_days?: number
+          organization_id?: string
+          sort_order?: number
+          text_color?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_status_rules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integration_sync_log: {
         Row: {
           completed_at: string | null

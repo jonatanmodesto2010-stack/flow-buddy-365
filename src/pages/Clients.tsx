@@ -17,6 +17,8 @@ import type { User } from '@supabase/supabase-js';
 import { ClientTimelineDialog } from '@/components/ClientTimelineDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ClientCard } from '@/components/ClientCard';
+import { OverdueBadge } from '@/components/OverdueBadge';
+import { useCollectionStatusRules } from '@/hooks/useCollectionStatusRules';
 
 const ITEMS_PER_PAGE = 30;
 
@@ -34,6 +36,7 @@ const Clients = () => {
   const [loading, setLoading] = useState(true);
   const [overdueDaysLoading, setOverdueDaysLoading] = useState(false);
   const { organizationId, isLoading: roleLoading } = useUserRole();
+  const { rules: statusRules } = useCollectionStatusRules();
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [newClientModalOpen, setNewClientModalOpen] = useState(false);
@@ -492,9 +495,7 @@ const Clients = () => {
                       onClick={() => handleOpenModal(client)}
                       badges={<>
                         {info.overdueDays > 0 &&
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${info.isBlocked ? 'bg-red-500 text-white' : info.isOverdue ? 'bg-yellow-500 text-black' : 'bg-green-500 text-white'}`}>
-                            {info.overdueDays}d
-                          </div>
+                          <OverdueBadge overdueDays={info.overdueDays} rules={statusRules} />
                         }
                         {info.isBlocked && <>
                           
@@ -511,7 +512,7 @@ const Clients = () => {
                         <Button variant="outline" size="icon" onClick={(e) => {e.stopPropagation();handleOpenTimelineDialog(client);}} className="border-green-500/30 hover:bg-green-500/10 text-green-400 hover:text-green-300" title="Ver Timeline">
                           <TrendingUp className="w-4 h-4" />
                         </Button>
-                      </>} className="py-[40px]" />);
+                      </>} />);
 
 
                 })}
