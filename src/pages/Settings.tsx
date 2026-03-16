@@ -12,6 +12,7 @@ import { HistorySettings } from '@/components/settings/HistorySettings';
 import { SystemChangelogSettings } from '@/components/settings/SystemChangelogSettings';
 import { ColorThemeSettings } from '@/components/settings/ColorThemeSettings';
 import { CollectionRulesSettings } from '@/components/settings/CollectionRulesSettings';
+import { BadgeRulesSettings } from '@/components/settings/BadgeRulesSettings';
 import { IntegrationsSettings } from '@/components/settings/IntegrationsSettings';
 import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
