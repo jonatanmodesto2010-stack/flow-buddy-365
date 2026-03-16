@@ -36,6 +36,7 @@ const Clients = () => {
   const [loading, setLoading] = useState(true);
   const [overdueDaysLoading, setOverdueDaysLoading] = useState(false);
   const { organizationId, isLoading: roleLoading } = useUserRole();
+  const { rules: statusRules } = useCollectionStatusRules();
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [newClientModalOpen, setNewClientModalOpen] = useState(false);
