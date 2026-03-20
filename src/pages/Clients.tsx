@@ -451,17 +451,6 @@ const Clients = () => {
                    </div>
 
                   <div className="flex items-center gap-3">
-                    <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-                      <SelectTrigger className="w-[200px] h-9">
-                        <ArrowDownUp className="w-4 h-4 mr-2 text-muted-foreground" />
-                        <SelectValue placeholder="Ordenação" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">Ordenação padrão</SelectItem>
-                        <SelectItem value="overdue_desc">Maior atraso primeiro</SelectItem>
-                        <SelectItem value="overdue_asc">Menor atraso primeiro</SelectItem>
-                      </SelectContent>
-                    </Select>
                     <button
                     onClick={() => navigate('/history')}
                     className="p-2 bg-primary/10 text-primary rounded-lg font-semibold hover:bg-primary/20 transition-all flex items-center justify-center whitespace-nowrap">
