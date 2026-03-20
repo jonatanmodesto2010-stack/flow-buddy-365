@@ -76,6 +76,7 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
       boletoFilter: 'all',
       timelineFilter: 'all',
       iconsFilter: [],
+      sortBy: 'default',
     });
   };
 
@@ -101,6 +102,7 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
     filters.boletoFilter !== 'all',
     filters.timelineFilter !== 'all',
     filters.iconsFilter.length > 0,
+    filters.sortBy !== 'default',
   ].filter(Boolean).length;
 
   const availableIcons = orgIcons.length > 0
@@ -300,6 +302,21 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
                 </div>
               </div>
 
+              {/* Ordenação */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Ordenação</label>
+                <Select value={filters.sortBy || 'default'} onValueChange={(value) => applyFilters({ sortBy: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Ordenação padrão</SelectItem>
+                    <SelectItem value="overdue_desc">Maior atraso primeiro</SelectItem>
+                    <SelectItem value="overdue_asc">Menor atraso primeiro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Apply Button */}
               <Button onClick={() => setShowFilters(false)} className="w-full">
                 Fechar
@@ -382,6 +399,15 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
               <X
                 className="w-3 h-3 cursor-pointer ml-1"
                 onClick={() => applyFilters({ iconsFilter: [] })}
+              />
+            </Badge>
+          )}
+          {filters.sortBy && filters.sortBy !== 'default' && (
+            <Badge variant="secondary" className="gap-1">
+              Ordenação: {filters.sortBy === 'overdue_desc' ? 'Maior atraso' : 'Menor atraso'}
+              <X
+                className="w-3 h-3 cursor-pointer"
+                onClick={() => applyFilters({ sortBy: 'default' })}
               />
             </Badge>
           )}
