@@ -424,6 +424,7 @@ const Clients = () => {
                 onFilterChange={(filters) => {
                   setSearchTerm(filters.searchTerm || '');
                   setStatusFilter(filters.statusFilter || 'all');
+                  setSortBy((filters.sortBy as any) || 'default');
                 }}
                 organizationId={organizationId}
                 pageName="clients" />
