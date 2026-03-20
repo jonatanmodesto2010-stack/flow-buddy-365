@@ -317,20 +317,6 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
                 </div>
               </div>
 
-              {/* Ordenação */}
-              <div>
-                <label className="text-sm font-medium mb-2 block">Ordenação</label>
-                <Select value={filters.sortBy || 'default'} onValueChange={(value) => applyFilters({ sortBy: value })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">Ordenação padrão</SelectItem>
-                    <SelectItem value="overdue_desc">Maior atraso primeiro</SelectItem>
-                    <SelectItem value="overdue_asc">Menor atraso primeiro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
 
               {/* Apply Button */}
               <Button onClick={() => setShowFilters(false)} className="w-full">
