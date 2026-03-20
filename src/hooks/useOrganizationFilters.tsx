@@ -14,6 +14,7 @@ export interface FilterValues {
   boletoFilter: string;
   timelineFilter: string;
   iconsFilter: string[];
+  sortBy: string;
 }
 
 const DEFAULT_FILTERS: FilterValues = {
