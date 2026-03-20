@@ -76,6 +76,7 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
       boletoFilter: 'all',
       timelineFilter: 'all',
       iconsFilter: [],
+      sortBy: 'default',
     });
   };
 

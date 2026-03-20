@@ -28,6 +28,7 @@ const DEFAULT_FILTERS: FilterValues = {
   boletoFilter: 'all',
   timelineFilter: 'all',
   iconsFilter: [],
+  sortBy: 'default',
 };
 
 export const useOrganizationFilters = (pageName: string) => {
