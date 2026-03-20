@@ -402,6 +402,15 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
               />
             </Badge>
           )}
+          {filters.sortBy && filters.sortBy !== 'default' && (
+            <Badge variant="secondary" className="gap-1">
+              Ordenação: {filters.sortBy === 'overdue_desc' ? 'Maior atraso' : 'Menor atraso'}
+              <X
+                className="w-3 h-3 cursor-pointer"
+                onClick={() => applyFilters({ sortBy: 'default' })}
+              />
+            </Badge>
+          )}
         </div>
       )}
     </div>
