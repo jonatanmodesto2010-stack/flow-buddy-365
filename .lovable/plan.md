@@ -1,45 +1,38 @@
 
 
-## Plano: Exibir tempo de conexão ao lado do badge ON/OFF
+## Plano: Corrigir exibição do tempo de conexão
 
-### 1. `src/lib/client-utils.ts` — Adicionar função utilitária
+### Problema
+Os logs mostram `radacct: found times for 0 clients` — a busca no `radacct` não encontra correspondências por username. Porém, a tabela `radusuarios` (já consultada) possui os campos necessários:
+- `ultima_conexao_inicial` → início da última conexão
+- `ultima_conexao_final` → fim da última conexão
+- `online` → S ou N
 
-Criar `formatConnectionDuration(since: string | null | undefined): string | null`:
-- Calcula `now - since` em milissegundos
-- Se `since` inválido/nulo/NaN → retorna `null`
-- `>= 1 dia` → `Xd Yh`
-- `>= 1 hora` → `Xh Ym`
-- `< 1 hora` → `Xm`
+### Solução
+Eliminar a consulta ao `radacct` e extrair os tempos diretamente de `radusuarios` no `processRecords`.
 
-### 2. `src/pages/Clients.tsx` — State + fetch + polling + renderização
+### Alteração: `supabase/functions/ixc-check-online/index.ts`
 
-**State** (linha ~32):
-- Adicionar `connectionTimes: Map<string, { since: string; online: boolean }>`
+**No `processRecords`** (linha ~107), além de capturar `online` e `login`, popular `connectionTimes` diretamente:
 
-**loadOnlineStatus** (linha ~208):
-- Após capturar `data.online_clients`, também capturar `data.connection_times` e popular o state
-
-**Polling 60s**:
-- Adicionar `useEffect` com `setInterval` de 60s que:
-  1. Re-chama `loadOnlineStatus` para os clientes bloqueados visíveis (re-fetch dos dados)
-  2. Incrementa um contador `tick` para forçar re-render do tempo formatado (garante que o texto não fique "travado")
-
-**Renderização badges** (linhas ~490-498):
-- Antes do badge ON/OFF, buscar `connectionTimes.get(client.client_id)`
-- Se existir `since` válido, renderizar duração formatada em `text-xs text-muted-foreground` antes do badge
-- Se não existir, mostrar apenas ON/OFF como hoje
-
-Exemplo visual no card:
-```text
-[1d 4h] 🟢 ON
-[3h 20m] 🔴 OFF
+```
+if online === 'S' e ultima_conexao_inicial existe:
+  connectionTimes[clientId] = { since: ultima_conexao_inicial, online: true }
+senão se ultima_conexao_final existe:
+  connectionTimes[clientId] = { since: ultima_conexao_final, online: false }
 ```
 
+**Remover** todo o bloco de consulta ao `radacct` (linhas 138-203), já que não é mais necessário.
+
+### Resultado
+- Zero chamadas extras à API IXC (sem radacct)
+- Tempo de conexão aparece imediatamente nos cards
+- Performance melhorada (menos requests)
+
 ### Arquivos alterados
-- `src/lib/client-utils.ts`
-- `src/pages/Clients.tsx`
+- `supabase/functions/ixc-check-online/index.ts`
 
 ### O que NÃO muda
-- Edge function `ixc-check-online` (já retorna `connection_times`)
-- Cards, busca, filtros, paginação, calendário
+- Frontend (`Clients.tsx`) — já consome `connection_times` corretamente
+- `client-utils.ts` — `formatConnectionDuration` já funciona
 
