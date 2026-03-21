@@ -510,13 +510,28 @@ const Clients = () => {
                         }
                         {info.isBlocked && <>
                           
-                          {client.client_id && (
-                          onlineClients.has(client.client_id) ?
-                          <div className="px-2.5 py-1 text-xs rounded-full flex items-center gap-1 font-semibold border border-green-500/30 text-muted-foreground bg-emerald-500"><Wifi size={11} /> ON</div> :
-                          !onlineLoading ?
-                          <div className="px-2.5 py-1 text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border bg-red-500"><WifiOff size={11} /> OFF</div> :
-                          null)
-                          }
+                          {client.client_id && (() => {
+                            const connInfo = connectionTimes.get(client.client_id!);
+                            const duration = connInfo ? formatConnectionDuration(connInfo.since) : null;
+                            const isOnline = onlineClients.has(client.client_id!);
+                            if (isOnline) {
+                              return (
+                                <div className="px-2.5 py-1 text-xs rounded-full flex items-center gap-1 font-semibold border border-green-500/30 text-muted-foreground bg-emerald-500">
+                                  {duration && <span className="opacity-80">[{duration}]</span>}
+                                  <Wifi size={11} /> ON
+                                </div>
+                              );
+                            }
+                            if (!onlineLoading) {
+                              return (
+                                <div className="px-2.5 py-1 text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border bg-red-500">
+                                  {duration && <span className="opacity-80">[{duration}]</span>}
+                                  <WifiOff size={11} /> OFF
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                         </>}
                         {info.isInactive && <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">Inativo</div>}
                         {info.isCompleted && <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">Finalizado</div>}
