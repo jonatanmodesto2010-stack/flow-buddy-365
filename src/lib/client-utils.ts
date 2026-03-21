@@ -160,3 +160,26 @@ export function getCardStyle(info: ClientBadgeInfo): string {
   if (info.isInactive || info.isCompleted) return 'bg-muted border border-border opacity-70';
   return 'bg-card border border-border';
 }
+
+/**
+ * Formats connection duration from a timestamp to a human-readable string.
+ * Returns null if the input is invalid.
+ */
+export function formatConnectionDuration(since: string | null | undefined): string | null {
+  if (!since) return null;
+  try {
+    const sinceDate = new Date(since);
+    if (isNaN(sinceDate.getTime())) return null;
+    const diffMs = Date.now() - sinceDate.getTime();
+    if (diffMs < 0) return null;
+    const totalMinutes = Math.floor(diffMs / 60000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  } catch {
+    return null;
+  }
+}
