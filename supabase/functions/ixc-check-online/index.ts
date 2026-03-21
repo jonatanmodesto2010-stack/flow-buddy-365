@@ -55,8 +55,7 @@ Deno.serve(async (req) => {
     console.log(`Using base API URL: ${apiUrl}`);
     const requestedIds = new Set(client_ids.map(String));
     const onlineClientIds = new Set<string>();
-    // Map client_id -> { login, online }
-    const clientLoginMap = new Map<string, { login: string; online: boolean }>();
+    // Connection times extracted from radusuarios
 
     const fetchIxcEndpoint = async (endpoint: string, reqBody: Record<string, string>) => {
       const url = `${apiUrl}/${endpoint}`;
@@ -99,11 +98,6 @@ Deno.serve(async (req) => {
     if (firstPage) {
       console.log(`radusuarios total: ${firstPage.total}, first page: ${firstPage.registros.length} records`);
 
-      if (firstPage.registros.length > 0) {
-        const sample = firstPage.registros[0];
-        console.log(`KEYS: ${Object.keys(sample).join(',')}`);
-      }
-
       const processRecords = (registros: any[]) => {
         for (const r of registros) {
           const clientId = String(r.id_cliente || '');
@@ -112,9 +106,14 @@ Deno.serve(async (req) => {
           if (online) {
             onlineClientIds.add(clientId);
           }
-          const login = String(r.login || '');
-          if (login) {
-            clientLoginMap.set(clientId, { login, online });
+
+          const ultimaConexaoInicial = String(r.ultima_conexao_inicial || '').trim();
+          const ultimaConexaoFinal = String(r.ultima_conexao_final || '').trim();
+
+          if (online && ultimaConexaoInicial && ultimaConexaoInicial !== '0000-00-00 00:00:00') {
+            connectionTimes[clientId] = { since: ultimaConexaoInicial, online: true };
+          } else if (!online && ultimaConexaoFinal && ultimaConexaoFinal !== '0000-00-00 00:00:00') {
+            connectionTimes[clientId] = { since: ultimaConexaoFinal, online: false };
           }
         }
       };
@@ -135,72 +134,7 @@ Deno.serve(async (req) => {
       console.log('radusuarios endpoint failed, returning empty');
     }
 
-    // Now fetch radacct for connection times
-    // We'll query for the logins we found that match requested clients
-    const connectionTimes: Record<string, { since: string; online: boolean }> = {};
-    
-    if (clientLoginMap.size > 0) {
-      console.log(`Fetching radacct for ${clientLoginMap.size} clients`);
-      
-      // Process in batches of logins - fetch radacct sorted by acctstarttime desc
-      // For each client, we need the most recent session
-      const clientEntries = [...clientLoginMap.entries()];
-      
-      // Batch: fetch all recent radacct records and match by username
-      const loginToClientId = new Map<string, string>();
-      for (const [clientId, info] of clientEntries) {
-        loginToClientId.set(info.login.toLowerCase(), clientId);
-      }
-      
-      // Fetch recent radacct records (sorted by newest first)
-      let radacctPage = 1;
-      const processedLogins = new Set<string>();
-      const maxRadacctPages = 20; // limit pages to avoid timeout
-      
-      while (radacctPage <= maxRadacctPages && processedLogins.size < clientLoginMap.size) {
-        const radacctData = await fetchIxcEndpoint('radacct', {
-          qtype: 'radacct.id',
-          query: '1',
-          oper: '>=',
-          page: String(radacctPage),
-          rp: '500',
-          sortname: 'radacct.acctstarttime',
-          sortorder: 'desc',
-        });
-
-        if (!radacctData || !radacctData.registros.length) break;
-
-        if (radacctPage === 1 && radacctData.registros.length > 0) {
-          console.log(`radacct sample keys: ${Object.keys(radacctData.registros[0]).join(',')}`);
-        }
-
-        for (const r of radacctData.registros) {
-          const username = String(r.username || r.login || '').toLowerCase();
-          if (!username || processedLogins.has(username)) continue;
-          
-          const clientId = loginToClientId.get(username);
-          if (!clientId) continue;
-
-          // Found the most recent session for this login
-          processedLogins.add(username);
-          
-          const acctstoptime = r.acctstoptime || r.datastop || null;
-          const acctstarttime = r.acctstarttime || r.datastart || null;
-          const isOnline = !acctstoptime || acctstoptime === '' || acctstoptime === '0000-00-00 00:00:00';
-
-          if (isOnline && acctstarttime) {
-            connectionTimes[clientId] = { since: acctstarttime, online: true };
-          } else if (!isOnline && acctstoptime) {
-            connectionTimes[clientId] = { since: acctstoptime, online: false };
-          }
-        }
-
-        if (radacctData.registros.length < 500) break;
-        radacctPage++;
-      }
-      
-      console.log(`radacct: found times for ${Object.keys(connectionTimes).length} clients`);
-    }
+    console.log(`connection_times: found for ${Object.keys(connectionTimes).length} clients`);
 
     const result = [...onlineClientIds];
     console.log(`Final: ${result.length} online out of ${client_ids.length} requested`);
