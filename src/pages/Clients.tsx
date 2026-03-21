@@ -30,7 +30,9 @@ const Clients = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [overdueDaysMap, setOverdueDaysMap] = useState<Map<string, number>>(new Map());
   const [onlineClients, setOnlineClients] = useState<Set<string>>(new Set());
+  const [connectionTimes, setConnectionTimes] = useState<Map<string, { since: string; online: boolean }>>(new Map());
   const [onlineLoading, setOnlineLoading] = useState(false);
+  const [tick, setTick] = useState(0);
   const [latestEventsMap, setLatestEventsMap] = useState<Map<string, {icon: string;description: string;event_date: string;}>>(new Map());
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
