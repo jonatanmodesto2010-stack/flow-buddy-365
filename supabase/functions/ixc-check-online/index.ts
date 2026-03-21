@@ -55,8 +55,7 @@ Deno.serve(async (req) => {
     console.log(`Using base API URL: ${apiUrl}`);
     const requestedIds = new Set(client_ids.map(String));
     const onlineClientIds = new Set<string>();
-    // Map client_id -> { login, online }
-    const clientLoginMap = new Map<string, { login: string; online: boolean }>();
+    // Connection times extracted from radusuarios
 
     const fetchIxcEndpoint = async (endpoint: string, reqBody: Record<string, string>) => {
       const url = `${apiUrl}/${endpoint}`;
