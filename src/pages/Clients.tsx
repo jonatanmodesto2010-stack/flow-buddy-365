@@ -267,6 +267,18 @@ const Clients = () => {
     setCurrentPage(1);
   }, [searchTerm, statusFilter, filialFilter]);
 
+  // Polling: re-fetch online status + tick for duration re-render every 60s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick((t) => t + 1);
+      const blockedClients = clients.filter((c) => !c.is_active && c.status !== 'archived' && c.status !== 'completed');
+      if (blockedClients.length > 0) {
+        loadOnlineStatus(blockedClients);
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [clients, organizationId]);
+
   // Sort clients based on sortBy option
   const sortedClients = useMemo(() => {
     if (sortBy === 'default') return clients;
