@@ -12,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { supabaseClient } from '@/lib/supabase-client';
 import { useToast } from '@/hooks/use-toast';
 import { useUserRole } from '@/hooks/useUserRole';
-import { calculateOverdueDays, getClientBadgeInfo, getCardStyle, type ClientTimeline, type GroupedClient } from '@/lib/client-utils';
+import { calculateOverdueDays, getClientBadgeInfo, getCardStyle, formatConnectionDuration, type ClientTimeline, type GroupedClient } from '@/lib/client-utils';
 import type { User } from '@supabase/supabase-js';
 import { ClientTimelineDialog } from '@/components/ClientTimelineDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -30,7 +30,9 @@ const Clients = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [overdueDaysMap, setOverdueDaysMap] = useState<Map<string, number>>(new Map());
   const [onlineClients, setOnlineClients] = useState<Set<string>>(new Set());
+  const [connectionTimes, setConnectionTimes] = useState<Map<string, { since: string; online: boolean }>>(new Map());
   const [onlineLoading, setOnlineLoading] = useState(false);
+  const [tick, setTick] = useState(0);
   const [latestEventsMap, setLatestEventsMap] = useState<Map<string, {icon: string;description: string;event_date: string;}>>(new Map());
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -226,6 +228,13 @@ const Clients = () => {
       if (data?.online_clients) {
         setOnlineClients(new Set(data.online_clients.map(String)));
       }
+      if (data?.connection_times) {
+        const map = new Map<string, { since: string; online: boolean }>();
+        for (const [cid, info] of Object.entries(data.connection_times as Record<string, { since: string; online: boolean }>)) {
+          map.set(cid, info);
+        }
+        setConnectionTimes(map);
+      }
     } catch (err) {
       console.error('Error loading online status:', err);
     } finally {
@@ -257,6 +266,18 @@ const Clients = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, statusFilter, filialFilter]);
+
+  // Polling: re-fetch online status + tick for duration re-render every 60s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick((t) => t + 1);
+      const blockedClients = clients.filter((c) => !c.is_active && c.status !== 'archived' && c.status !== 'completed');
+      if (blockedClients.length > 0) {
+        loadOnlineStatus(blockedClients);
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [clients, organizationId]);
 
   // Sort clients based on sortBy option
   const sortedClients = useMemo(() => {
@@ -489,13 +510,28 @@ const Clients = () => {
                         }
                         {info.isBlocked && <>
                           
-                          {client.client_id && (
-                          onlineClients.has(client.client_id) ?
-                          <div className="px-2.5 py-1 text-xs rounded-full flex items-center gap-1 font-semibold border border-green-500/30 text-muted-foreground bg-emerald-500"><Wifi size={11} /> ON</div> :
-                          !onlineLoading ?
-                          <div className="px-2.5 py-1 text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border bg-red-500"><WifiOff size={11} /> OFF</div> :
-                          null)
-                          }
+                          {client.client_id && (() => {
+                            const connInfo = connectionTimes.get(client.client_id!);
+                            const duration = connInfo ? formatConnectionDuration(connInfo.since) : null;
+                            const isOnline = onlineClients.has(client.client_id!);
+                            if (isOnline) {
+                              return (
+                                <div className="px-2.5 py-1 text-xs rounded-full flex items-center gap-1 font-semibold border border-green-500/30 text-muted-foreground bg-emerald-500">
+                                  {duration && <span className="opacity-80">[{duration}]</span>}
+                                  <Wifi size={11} /> ON
+                                </div>
+                              );
+                            }
+                            if (!onlineLoading) {
+                              return (
+                                <div className="px-2.5 py-1 text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border bg-red-500">
+                                  {duration && <span className="opacity-80">[{duration}]</span>}
+                                  <WifiOff size={11} /> OFF
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                         </>}
                         {info.isInactive && <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">Inativo</div>}
                         {info.isCompleted && <div className="px-3 py-1 bg-muted text-muted-foreground text-xs rounded-full font-semibold">Finalizado</div>}
