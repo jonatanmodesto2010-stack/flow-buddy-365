@@ -228,6 +228,13 @@ const Clients = () => {
       if (data?.online_clients) {
         setOnlineClients(new Set(data.online_clients.map(String)));
       }
+      if (data?.connection_times) {
+        const map = new Map<string, { since: string; online: boolean }>();
+        for (const [cid, info] of Object.entries(data.connection_times as Record<string, { since: string; online: boolean }>)) {
+          map.set(cid, info);
+        }
+        setConnectionTimes(map);
+      }
     } catch (err) {
       console.error('Error loading online status:', err);
     } finally {
