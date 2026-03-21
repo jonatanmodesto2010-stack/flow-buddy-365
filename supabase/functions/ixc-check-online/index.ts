@@ -98,11 +98,6 @@ Deno.serve(async (req) => {
     if (firstPage) {
       console.log(`radusuarios total: ${firstPage.total}, first page: ${firstPage.registros.length} records`);
 
-      if (firstPage.registros.length > 0) {
-        const sample = firstPage.registros[0];
-        console.log(`KEYS: ${Object.keys(sample).join(',')}`);
-      }
-
       const processRecords = (registros: any[]) => {
         for (const r of registros) {
           const clientId = String(r.id_cliente || '');
@@ -112,7 +107,6 @@ Deno.serve(async (req) => {
             onlineClientIds.add(clientId);
           }
 
-          // Extract connection times directly from radusuarios
           const ultimaConexaoInicial = String(r.ultima_conexao_inicial || '').trim();
           const ultimaConexaoFinal = String(r.ultima_conexao_final || '').trim();
 
@@ -123,6 +117,24 @@ Deno.serve(async (req) => {
           }
         }
       };
+
+      processRecords(firstPage.registros);
+
+      if (firstPage.registros.length >= 500) {
+        let page = 2;
+        while (page <= 200) {
+          const pageData = await fetchRadusuarios(page);
+          if (!pageData || !pageData.registros.length) break;
+          processRecords(pageData.registros);
+          if (pageData.registros.length < 500) break;
+          page++;
+        }
+      }
+    } else {
+      console.log('radusuarios endpoint failed, returning empty');
+    }
+
+    console.log(`connection_times: found for ${Object.keys(connectionTimes).length} clients`);
 
     const result = [...onlineClientIds];
     console.log(`Final: ${result.length} online out of ${client_ids.length} requested`);
