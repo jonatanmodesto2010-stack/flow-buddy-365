@@ -1011,6 +1011,7 @@ Deno.serve(async (req) => {
           orgResult.boletos = streamResult.totalRecords;
           orgResult.boletos_inserted = totalInserted;
           orgResult.boletos_updated = boletosToUpdateViaRpc.length;
+          orgResult.boletos_unmapped = unmappedBoletoCount;
 
           logSyncSummary('BOLETOS', metrics);
           allMetrics.push(metrics);
