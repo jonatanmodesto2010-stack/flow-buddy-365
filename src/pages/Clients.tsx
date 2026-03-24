@@ -326,6 +326,43 @@ const Clients = () => {
     return () => clearInterval(interval);
   }, [clients, organizationId]);
 
+  // Auto-reload when a new sync completes (poll every 60s)
+  useEffect(() => {
+    if (!organizationId) return;
+
+    const checkLatestSync = async () => {
+      try {
+        const { data } = await (supabaseClient as any)
+          .from('integration_sync_log')
+          .select('completed_at')
+          .eq('organization_id', organizationId)
+          .eq('status', 'completed')
+          .order('completed_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const completedAt = data?.completed_at || null;
+
+        if (lastCompletedSyncAtRef.current === null) {
+          // First read — just store value, don't reload
+          lastCompletedSyncAtRef.current = completedAt;
+          setLastCompletedSyncAt(completedAt);
+        } else if (completedAt && completedAt !== lastCompletedSyncAtRef.current) {
+          // New sync detected — reload
+          lastCompletedSyncAtRef.current = completedAt;
+          setLastCompletedSyncAt(completedAt);
+          loadClients();
+        }
+      } catch (err) {
+        console.error('Error checking sync status:', err);
+      }
+    };
+
+    checkLatestSync();
+    const interval = setInterval(checkLatestSync, 60000);
+    return () => clearInterval(interval);
+  }, [organizationId]);
+
   // Sort clients based on sortBy option
   const sortedClients = useMemo(() => {
     if (sortBy === 'default') return clients;
@@ -337,9 +374,9 @@ const Clients = () => {
   }, [clients, overdueDaysMap, sortBy]);
 
   // Pagination calculations
-  const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = Math.min(startIndex + clients.length, totalCount);
+  const totalPages = isBlockedView ? 1 : Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
+  const startIndex = isBlockedView ? 0 : (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = isBlockedView ? totalCount : Math.min(startIndex + clients.length, totalCount);
 
   const handleOpenModal = (client: ClientTimeline) => {
     setSelectedClient(client);
