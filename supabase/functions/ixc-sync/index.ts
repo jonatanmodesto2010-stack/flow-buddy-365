@@ -809,6 +809,23 @@ Deno.serve(async (req) => {
             if (t.client_id) clientToTimeline.set(t.client_id, t.id);
           }
 
+          // Build contract-to-timeline map for fallback mapping
+          const contractsUrl = integration.api_url_contracts || api_url;
+          let contractToTimeline = new Map<string, string>();
+          try {
+            const contracts = await fetchAllIxcRecords(contractsUrl, token, 'cliente_contrato');
+            for (const c of contracts) {
+              const cClientId = String(c.id_cliente || '');
+              const tId = clientToTimeline.get(cClientId);
+              if (tId) contractToTimeline.set(String(c.id), tId);
+            }
+            console.log(`[sync_boletos] Contract map built: ${contractToTimeline.size} contracts mapped to timelines`);
+          } catch (e: any) {
+            console.log(`[sync_boletos] Could not fetch contracts for fallback mapping: ${e.message}`);
+          }
+
+          let unmappedBoletoCount = 0;
+
           // For incremental mode with few expected changes, load only needed existing boletos
           // For full scan, load all existing boletos
           // TODO: NEXT OPTIMIZATION - For orgs with >50k boletos in full scan mode,
@@ -863,8 +880,15 @@ Deno.serve(async (req) => {
 
               for (const boleto of registros) {
                 const clientId = String(boleto.id_cliente);
-                const timelineId = clientToTimeline.get(clientId);
-                if (!timelineId) continue;
+                let timelineId = clientToTimeline.get(clientId);
+                if (!timelineId) {
+                  const contratoId = String(boleto.id_contrato || '');
+                  if (contratoId) timelineId = contractToTimeline.get(contratoId);
+                }
+                if (!timelineId) {
+                  unmappedBoletoCount++;
+                  continue;
+                }
 
                 const ixcBoletoId = String(boleto.id);
                 const valor = parseFloat(boleto.valor || '0');
@@ -930,6 +954,10 @@ Deno.serve(async (req) => {
             }
           }
 
+          if (unmappedBoletoCount > 0) {
+            console.log(`[sync_boletos] ${unmappedBoletoCount} boletos sem mapeamento (nem por id_cliente nem por id_contrato)`);
+          }
+
           metrics.pagesProcessed += streamResult.pagesProcessed;
           metrics.totalRecordsFromIxc = streamResult.totalRecords;
           metrics.durations.push({ phase: 'Fetch+classify boletos', seconds: (Date.now() - fetchStart) / 1000 });
@@ -983,6 +1011,7 @@ Deno.serve(async (req) => {
           orgResult.boletos = streamResult.totalRecords;
           orgResult.boletos_inserted = totalInserted;
           orgResult.boletos_updated = boletosToUpdateViaRpc.length;
+          orgResult.boletos_unmapped = unmappedBoletoCount;
 
           logSyncSummary('BOLETOS', metrics);
           allMetrics.push(metrics);
@@ -1047,6 +1076,21 @@ Deno.serve(async (req) => {
             if (t.client_id) { clientToTimeline.set(t.client_id, t.id); knownClientIds.add(t.client_id); }
           }
 
+          // Build contract-to-timeline map for fallback mapping (areceber)
+          const contractsUrlAR = integration.api_url_contracts || api_url;
+          let contractToTimelineAR = new Map<string, string>();
+          try {
+            const contractsAR = await fetchAllIxcRecords(contractsUrlAR, token, 'cliente_contrato');
+            for (const c of contractsAR) {
+              const cClientId = String(c.id_cliente || '');
+              const tId = clientToTimeline.get(cClientId);
+              if (tId) contractToTimelineAR.set(String(c.id), tId);
+            }
+            console.log(`[sync_areceber] Contract map built: ${contractToTimelineAR.size} contracts mapped`);
+          } catch (e: any) {
+            console.log(`[sync_areceber] Could not fetch contracts: ${e.message}`);
+          }
+
           // Stream process pending receivables
           const debtPerClient = new Map<string, number>();
           const newClientIds = new Set<string>();
@@ -1055,7 +1099,18 @@ Deno.serve(async (req) => {
             api_url, token, 'fn_areceber', supabase, syncId,
             async (registros) => {
               for (const item of registros) {
-                const clientId = String(item.id_cliente);
+                let clientId = String(item.id_cliente);
+                // Fallback via contrato if client not known
+                if (!knownClientIds.has(clientId)) {
+                  const contratoId = String(item.id_contrato || '');
+                  const fallbackTimeline = contratoId ? contractToTimelineAR.get(contratoId) : undefined;
+                  if (fallbackTimeline) {
+                    // Find the clientId that maps to this timeline
+                    for (const [cid, tid] of clientToTimeline) {
+                      if (tid === fallbackTimeline) { clientId = cid; break; }
+                    }
+                  }
+                }
                 const valorAberto = parseFloat(item.valor_aberto || item.valor || '0');
                 debtPerClient.set(clientId, (debtPerClient.get(clientId) || 0) + valorAberto);
                 if (!knownClientIds.has(clientId)) newClientIds.add(clientId);
