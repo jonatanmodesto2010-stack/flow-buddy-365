@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, History, TrendingUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw, Building2, Wifi, WifiOff } from 'lucide-react';
+import { fetchInChunks } from '@/lib/supabase-helpers';
 import { AppLayout } from '@/components/AppLayout';
 import { ClientDashboardModal } from '@/components/ClientDashboardModal';
 import { ClientSearchFilters } from '@/components/ClientSearchFilters';
@@ -55,8 +56,12 @@ const Clients = () => {
   const [filialFilter, setFilialFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'default' | 'overdue_desc' | 'overdue_asc'>('default');
   const [filiais, setFiliais] = useState<[string, string][]>([]);
+  const [lastCompletedSyncAt, setLastCompletedSyncAt] = useState<string | null>(null);
+  const lastCompletedSyncAtRef = useRef<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const isBlockedView = statusFilter === 'blocked';
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -110,46 +115,80 @@ const Clients = () => {
     try {
       setLoading(true);
 
-      // Build server-side query
-      let query = (supabaseClient as any).
-      from('unique_client_timelines').
-      select(CLIENT_COLUMNS, { count: 'exact' }).
-      eq('organization_id', organizationId);
+      // Build base query builder function
+      const buildBaseQuery = () => {
+        let query = (supabaseClient as any).
+        from('unique_client_timelines').
+        select(CLIENT_COLUMNS, { count: 'exact' }).
+        eq('organization_id', organizationId);
 
-      // Server-side filters
-      if (filialFilter !== 'all') {
-        query = query.eq('ixc_filial_id', filialFilter);
+        if (filialFilter !== 'all') {
+          query = query.eq('ixc_filial_id', filialFilter);
+        }
+
+        if (searchTerm) {
+          query = query.or(`client_name.ilike.%${searchTerm}%,client_id.ilike.%${searchTerm}%`);
+        }
+
+        if (statusFilter === 'active') {
+          query = query.eq('is_active', true).eq('status', 'active');
+        } else if (statusFilter === 'blocked') {
+          query = query.eq('is_active', false).not('status', 'in', '("archived","completed")');
+        } else if (statusFilter === 'inactive') {
+          query = query.eq('status', 'archived');
+        } else if (statusFilter === 'completed') {
+          query = query.eq('status', 'completed');
+        }
+
+        query = query.
+        order('is_active', { ascending: true }).
+        order('client_name', { ascending: true });
+
+        return query;
+      };
+
+      let data: any[] | null = null;
+      let count: number | null = null;
+
+      if (isBlockedView) {
+        // Fetch ALL blocked clients in chunks of 1000
+        const allResults: any[] = [];
+        let from = 0;
+        const CHUNK_SIZE = 1000;
+        let hasMore = true;
+        let totalFromServer: number | null = null;
+
+        while (hasMore) {
+          const query = buildBaseQuery().range(from, from + CHUNK_SIZE - 1);
+          const result = await query;
+          if (result.error) throw result.error;
+
+          if (totalFromServer === null) {
+            totalFromServer = result.count;
+          }
+
+          if (result.data && result.data.length > 0) {
+            allResults.push(...result.data);
+            from += CHUNK_SIZE;
+            hasMore = result.data.length === CHUNK_SIZE;
+          } else {
+            hasMore = false;
+          }
+        }
+
+        data = allResults;
+        count = totalFromServer ?? allResults.length;
+      } else {
+        // Standard paginated mode
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        const end = start + ITEMS_PER_PAGE - 1;
+        const query = buildBaseQuery().range(start, end);
+
+        const result = await query;
+        if (result.error) throw result.error;
+        data = result.data;
+        count = result.count;
       }
-
-      if (searchTerm) {
-        // Search by name or client_id
-        query = query.or(`client_name.ilike.%${searchTerm}%,client_id.ilike.%${searchTerm}%`);
-      }
-
-      if (statusFilter === 'active') {
-        query = query.eq('is_active', true).eq('status', 'active');
-      } else if (statusFilter === 'blocked') {
-        query = query.eq('is_active', false).not('status', 'in', '("archived","completed")');
-      } else if (statusFilter === 'inactive') {
-        query = query.eq('status', 'archived');
-      } else if (statusFilter === 'completed') {
-        query = query.eq('status', 'completed');
-      }
-      // 'overdue' filter handled after boleto load
-      // 'all' = no extra filter
-
-      // Sort: blocked first (is_active asc), then by name
-      query = query.
-      order('is_active', { ascending: true }).
-      order('client_name', { ascending: true });
-
-      // Paginate server-side
-      const start = (currentPage - 1) * ITEMS_PER_PAGE;
-      const end = start + ITEMS_PER_PAGE - 1;
-      query = query.range(start, end);
-
-      const { data, count, error } = await query;
-      if (error) throw error;
 
       setClients(data || []);
       setTotalCount(count || 0);
@@ -159,7 +198,7 @@ const Clients = () => {
         loadOverdueDays(data);
         loadLatestEvents(data);
         // Load online status for blocked clients
-        const blockedClients = data.filter((c) => !c.is_active && c.status !== 'archived' && c.status !== 'completed');
+        const blockedClients = data.filter((c: any) => !c.is_active && c.status !== 'archived' && c.status !== 'completed');
         if (blockedClients.length > 0) {
           loadOnlineStatus(blockedClients);
         } else {
@@ -183,13 +222,16 @@ const Clients = () => {
       setOverdueDaysLoading(true);
       const timelineIds = timelines.map((t) => t.id);
 
-      const { data: boletos } = await supabaseClient.
-      from('client_boletos').
-      select('timeline_id, due_date, status').
-      in('timeline_id', timelineIds);
+      // Use fetchInChunks for large lists
+      const boletos = timelineIds.length > 200
+        ? await fetchInChunks('client_boletos', 'timeline_id', timelineIds, 'timeline_id, due_date, status')
+        : await (async () => {
+            const { data } = await supabaseClient.from('client_boletos').select('timeline_id, due_date, status').in('timeline_id', timelineIds);
+            return data || [];
+          })();
 
       const boletosMap = new Map<string, {due_date: string;status: string;}[]>();
-      for (const b of boletos || []) {
+      for (const b of boletos) {
         if (!boletosMap.has(b.timeline_id)) boletosMap.set(b.timeline_id, []);
         boletosMap.get(b.timeline_id)!.push(b);
       }
@@ -245,13 +287,18 @@ const Clients = () => {
   const loadLatestEvents = async (timelines: ClientTimeline[]) => {
     try {
       const timelineIds = timelines.map((t) => t.id);
-      const { data, error } = await (supabaseClient as any).
-      from('latest_client_events').
-      select('timeline_id, icon, description, event_date').
-      in('timeline_id', timelineIds);
-      if (error) throw error;
+
+      // Use fetchInChunks for large lists
+      const eventsData = timelineIds.length > 200
+        ? await fetchInChunks('latest_client_events', 'timeline_id', timelineIds, 'timeline_id, icon, description, event_date')
+        : await (async () => {
+            const { data, error } = await (supabaseClient as any).from('latest_client_events').select('timeline_id, icon, description, event_date').in('timeline_id', timelineIds);
+            if (error) throw error;
+            return data || [];
+          })();
+
       const map = new Map<string, {icon: string;description: string;event_date: string;}>();
-      for (const e of data || []) {
+      for (const e of eventsData) {
         if (e.timeline_id) {
           map.set(e.timeline_id, { icon: e.icon || '💬', description: e.description || '', event_date: e.event_date || '' });
         }
@@ -279,6 +326,43 @@ const Clients = () => {
     return () => clearInterval(interval);
   }, [clients, organizationId]);
 
+  // Auto-reload when a new sync completes (poll every 60s)
+  useEffect(() => {
+    if (!organizationId) return;
+
+    const checkLatestSync = async () => {
+      try {
+        const { data } = await (supabaseClient as any)
+          .from('integration_sync_log')
+          .select('completed_at')
+          .eq('organization_id', organizationId)
+          .eq('status', 'completed')
+          .order('completed_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const completedAt = data?.completed_at || null;
+
+        if (lastCompletedSyncAtRef.current === null) {
+          // First read — just store value, don't reload
+          lastCompletedSyncAtRef.current = completedAt;
+          setLastCompletedSyncAt(completedAt);
+        } else if (completedAt && completedAt !== lastCompletedSyncAtRef.current) {
+          // New sync detected — reload
+          lastCompletedSyncAtRef.current = completedAt;
+          setLastCompletedSyncAt(completedAt);
+          loadClients();
+        }
+      } catch (err) {
+        console.error('Error checking sync status:', err);
+      }
+    };
+
+    checkLatestSync();
+    const interval = setInterval(checkLatestSync, 60000);
+    return () => clearInterval(interval);
+  }, [organizationId]);
+
   // Sort clients based on sortBy option
   const sortedClients = useMemo(() => {
     if (sortBy === 'default') return clients;
@@ -290,9 +374,9 @@ const Clients = () => {
   }, [clients, overdueDaysMap, sortBy]);
 
   // Pagination calculations
-  const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = Math.min(startIndex + clients.length, totalCount);
+  const totalPages = isBlockedView ? 1 : Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
+  const startIndex = isBlockedView ? 0 : (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = isBlockedView ? totalCount : Math.min(startIndex + clients.length, totalCount);
 
   const handleOpenModal = (client: ClientTimeline) => {
     setSelectedClient(client);
@@ -454,21 +538,29 @@ const Clients = () => {
                 {/* Pagination Controls */}
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <div className="flex items-center gap-1">
-                    <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Primeira página">
-                      <ChevronsLeft size={16} />
-                    </button>
-                    <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Página anterior">
-                      <ChevronLeft size={16} />
-                    </button>
+                    {!isBlockedView && (
+                      <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Primeira página">
+                        <ChevronsLeft size={16} />
+                      </button>
+                    )}
+                    {!isBlockedView && (
+                      <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Página anterior">
+                        <ChevronLeft size={16} />
+                      </button>
+                    )}
                     <button onClick={loadClients} className="p-1.5 rounded hover:bg-muted transition-colors" title="Atualizar">
                       <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                     </button>
-                    <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Próxima página">
-                      <ChevronRight size={16} />
-                    </button>
-                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Última página">
-                      <ChevronsRight size={16} />
-                    </button>
+                    {!isBlockedView && (
+                      <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Próxima página">
+                        <ChevronRight size={16} />
+                      </button>
+                    )}
+                    {!isBlockedView && (
+                      <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Última página">
+                        <ChevronsRight size={16} />
+                      </button>
+                    )}
                    </div>
 
                   <div className="flex items-center gap-3">
