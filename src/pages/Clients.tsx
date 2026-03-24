@@ -115,46 +115,80 @@ const Clients = () => {
     try {
       setLoading(true);
 
-      // Build server-side query
-      let query = (supabaseClient as any).
-      from('unique_client_timelines').
-      select(CLIENT_COLUMNS, { count: 'exact' }).
-      eq('organization_id', organizationId);
+      // Build base query builder function
+      const buildBaseQuery = () => {
+        let query = (supabaseClient as any).
+        from('unique_client_timelines').
+        select(CLIENT_COLUMNS, { count: 'exact' }).
+        eq('organization_id', organizationId);
 
-      // Server-side filters
-      if (filialFilter !== 'all') {
-        query = query.eq('ixc_filial_id', filialFilter);
+        if (filialFilter !== 'all') {
+          query = query.eq('ixc_filial_id', filialFilter);
+        }
+
+        if (searchTerm) {
+          query = query.or(`client_name.ilike.%${searchTerm}%,client_id.ilike.%${searchTerm}%`);
+        }
+
+        if (statusFilter === 'active') {
+          query = query.eq('is_active', true).eq('status', 'active');
+        } else if (statusFilter === 'blocked') {
+          query = query.eq('is_active', false).not('status', 'in', '("archived","completed")');
+        } else if (statusFilter === 'inactive') {
+          query = query.eq('status', 'archived');
+        } else if (statusFilter === 'completed') {
+          query = query.eq('status', 'completed');
+        }
+
+        query = query.
+        order('is_active', { ascending: true }).
+        order('client_name', { ascending: true });
+
+        return query;
+      };
+
+      let data: any[] | null = null;
+      let count: number | null = null;
+
+      if (isBlockedView) {
+        // Fetch ALL blocked clients in chunks of 1000
+        const allResults: any[] = [];
+        let from = 0;
+        const CHUNK_SIZE = 1000;
+        let hasMore = true;
+        let totalFromServer: number | null = null;
+
+        while (hasMore) {
+          const query = buildBaseQuery().range(from, from + CHUNK_SIZE - 1);
+          const result = await query;
+          if (result.error) throw result.error;
+
+          if (totalFromServer === null) {
+            totalFromServer = result.count;
+          }
+
+          if (result.data && result.data.length > 0) {
+            allResults.push(...result.data);
+            from += CHUNK_SIZE;
+            hasMore = result.data.length === CHUNK_SIZE;
+          } else {
+            hasMore = false;
+          }
+        }
+
+        data = allResults;
+        count = totalFromServer ?? allResults.length;
+      } else {
+        // Standard paginated mode
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        const end = start + ITEMS_PER_PAGE - 1;
+        const query = buildBaseQuery().range(start, end);
+
+        const result = await query;
+        if (result.error) throw result.error;
+        data = result.data;
+        count = result.count;
       }
-
-      if (searchTerm) {
-        // Search by name or client_id
-        query = query.or(`client_name.ilike.%${searchTerm}%,client_id.ilike.%${searchTerm}%`);
-      }
-
-      if (statusFilter === 'active') {
-        query = query.eq('is_active', true).eq('status', 'active');
-      } else if (statusFilter === 'blocked') {
-        query = query.eq('is_active', false).not('status', 'in', '("archived","completed")');
-      } else if (statusFilter === 'inactive') {
-        query = query.eq('status', 'archived');
-      } else if (statusFilter === 'completed') {
-        query = query.eq('status', 'completed');
-      }
-      // 'overdue' filter handled after boleto load
-      // 'all' = no extra filter
-
-      // Sort: blocked first (is_active asc), then by name
-      query = query.
-      order('is_active', { ascending: true }).
-      order('client_name', { ascending: true });
-
-      // Paginate server-side
-      const start = (currentPage - 1) * ITEMS_PER_PAGE;
-      const end = start + ITEMS_PER_PAGE - 1;
-      query = query.range(start, end);
-
-      const { data, count, error } = await query;
-      if (error) throw error;
 
       setClients(data || []);
       setTotalCount(count || 0);
@@ -164,7 +198,7 @@ const Clients = () => {
         loadOverdueDays(data);
         loadLatestEvents(data);
         // Load online status for blocked clients
-        const blockedClients = data.filter((c) => !c.is_active && c.status !== 'archived' && c.status !== 'completed');
+        const blockedClients = data.filter((c: any) => !c.is_active && c.status !== 'archived' && c.status !== 'completed');
         if (blockedClients.length > 0) {
           loadOnlineStatus(blockedClients);
         } else {
