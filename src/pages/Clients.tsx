@@ -56,8 +56,12 @@ const Clients = () => {
   const [filialFilter, setFilialFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'default' | 'overdue_desc' | 'overdue_asc'>('default');
   const [filiais, setFiliais] = useState<[string, string][]>([]);
+  const [lastCompletedSyncAt, setLastCompletedSyncAt] = useState<string | null>(null);
+  const lastCompletedSyncAtRef = useRef<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const isBlockedView = statusFilter === 'blocked';
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
