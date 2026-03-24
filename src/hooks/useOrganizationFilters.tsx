@@ -15,6 +15,7 @@ export interface FilterValues {
   timelineFilter: string;
   iconsFilter: string[];
   sortBy: string;
+  filialFilter: string;
 }
 
 const DEFAULT_FILTERS: FilterValues = {
