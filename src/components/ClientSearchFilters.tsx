@@ -180,6 +180,24 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName, 
                 </Select>
               </div>
 
+              {/* Filial */}
+              {filiais.length > 0 && (
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Filial</label>
+                  <Select value={filters.filialFilter} onValueChange={(value) => applyFilters({ filialFilter: value })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas filiais</SelectItem>
+                      {filiais.map(([id, name]) => (
+                        <SelectItem key={id} value={id}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {/* Ordenação */}
               <div>
                 <label className="text-sm font-medium mb-2 block">Ordenação</label>
