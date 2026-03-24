@@ -1,79 +1,58 @@
 
 
-## Plano: Refatorar sync de boletos para buscar via contratos
+## Plano: Mover filtro de Filial para dentro dos Filtros Avançados
 
-### Problema confirmado
-O sync atual busca todos os registros de `fn_areceber` do IXC e mapeia cada boleto para uma timeline local via `id_cliente` (linha 865-867). Boletos cujo `id_cliente` no IXC não corresponde diretamente ao `client_id` local são silenciosamente descartados. Isso causa boletos faltando (ex: cliente 2159).
+### Problema
+O filtro de filial existe como um `<Select>` separado no header da página de Clientes (linha 512-525 de `Clients.tsx`), mas não aparece dentro do popover de Filtros Avançados do componente `ClientSearchFilters`. O usuário espera encontrá-lo no painel de filtros avançados.
 
 ### Solução
-Adicionar um mapa secundário `contrato → timeline_id` construído a partir dos contratos do IXC (`cliente_contrato`), para que boletos que não mapeiem via `id_cliente` possam ser mapeados via `id_contrato`.
+Adicionar o campo "Filial" dentro do popover de filtros avançados em `ClientSearchFilters`, e remover o `<Select>` standalone do header em `Clients.tsx`.
 
-### Arquivo alterado
-- `supabase/functions/ixc-sync/index.ts`
+### Arquivos alterados
 
-### Alterações detalhadas
+#### 1. `src/hooks/useOrganizationFilters.tsx`
+- Adicionar `filialFilter: string` ao `FilterValues` interface (default: `'all'`)
+- Adicionar ao `DEFAULT_FILTERS`
 
-#### 1. No bloco SYNC BOLETOS (linha ~805-810), após carregar timelines e construir `clientToTimeline`
+#### 2. `src/components/ClientSearchFilters.tsx`
+- Receber `filiais: [string, string][]` como prop
+- Adicionar um `<Select>` de "Filial" no popover, entre Status e Ordenação
+- Incluir `filialFilter !== 'all'` no `activeFiltersCount`
+- Adicionar badge ativo para filial no display de filtros ativos
 
-Adicionar:
-- Buscar todos os contratos do IXC via `fetchAllIxcRecords(contractsUrl || api_url, token, 'cliente_contrato')`
-- Construir mapa `contractToTimeline: Map<string, string>` onde para cada contrato, `id_contrato → timeline_id` (usando `contrato.id_cliente → clientToTimeline`)
-- Logar quantos contratos foram mapeados
+#### 3. `src/pages/Clients.tsx`
+- Remover o `<Select>` de filial standalone do header (linhas 512-525)
+- Remover o state `filialFilter` local — usar o valor vindo do `onFilterChange`
+- Passar `filiais` como prop para `<ClientSearchFilters>`
+- Ler `filialFilter` dos filtros retornados pelo callback `onFilterChange`
 
-```text
-contractsUrl = integration.api_url_contracts || api_url
-contracts = fetchAllIxcRecords(contractsUrl, token, 'cliente_contrato')
-contractToTimeline = new Map()
-for each contract:
-  clientId = String(contract.id_cliente)
-  timelineId = clientToTimeline.get(clientId)
-  if timelineId:
-    contractToTimeline.set(String(contract.id), timelineId)
-```
+### Detalhes técnicos
 
-#### 2. Na callback de processamento de boletos (linha ~864-867)
-
-Alterar a resolução de `timelineId` para usar fallback via contrato:
-
-```text
-// Antes:
-const timelineId = clientToTimeline.get(clientId);
-if (!timelineId) continue;
-
-// Depois:
-let timelineId = clientToTimeline.get(clientId);
-if (!timelineId) {
-  const contratoId = String(boleto.id_contrato || '');
-  timelineId = contractToTimeline.get(contratoId);
-}
-if (!timelineId) {
-  unmappedCount++;
-  continue;
+**Nova prop em ClientSearchFilters:**
+```ts
+interface ClientSearchFiltersProps {
+  onFilterChange: (filters: FilterValues) => void;
+  organizationId: string | null;
+  pageName: string;
+  filiais?: [string, string][]; // novo
 }
 ```
 
-#### 3. Adicionar contador de boletos não mapeados
+**Novo campo no popover (após Status, antes de Ordenação):**
+```text
+Filial
+[Select: Todas filiais / filial1 / filial2 / ...]
+```
 
-- Criar variável `let unmappedCount = 0` antes do stream processing
-- Após o stream, logar: `console.log(\`[sync_boletos] ${unmappedCount} boletos sem mapeamento\`)`
-- Incluir `unmappedCount` no `sync_metadata` do log
+Só renderiza se `filiais.length > 0`.
 
-#### 4. Replicar a mesma lógica no bloco SYNC ARECEBER (linha ~1042-1048)
-
-O bloco `sync_areceber` (action `sync_areceber`) tem a mesma lógica de mapeamento por `id_cliente`. Aplicar a mesma correção de fallback via contrato.
+**Badge ativo:**
+```text
+Filial: <nome_da_filial> [X]
+```
 
 ### O que NÃO muda
-- Layout da página de Clientes
-- Lógica de sync de clientes
-- Mapeamento de status de boletos (`pago`, `pendente`, `cancelado`)
-- Estrutura da tabela `client_boletos`
-- Edge functions de diagnóstico
-
-### Por que isso resolve
-O boleto de março/2026 da cliente 2159 tem `id_contrato` no IXC que aponta para o `id_cliente = 2159`. Hoje o sync tenta mapear direto via `id_cliente` do boleto, que pode divergir. Com o fallback via contrato, o sync resolve `id_contrato → id_cliente → timeline_id`, garantindo que o boleto entre no banco local.
-
-### Cuidados de performance
-- `cliente_contrato` é uma tabela pequena (já buscada no sync de clientes) — custo mínimo
-- O mapa `contractToTimeline` é construído uma vez antes do stream, sem impacto no loop principal
-- Nenhum request adicional ao IXC por boleto individual
+- Lógica de carregamento de filiais (`loadFiliais` em Clients.tsx)
+- Query de filtragem por `ixc_filial_id`
+- Outras páginas (Dashboard mantém seu filtro próprio)
 
