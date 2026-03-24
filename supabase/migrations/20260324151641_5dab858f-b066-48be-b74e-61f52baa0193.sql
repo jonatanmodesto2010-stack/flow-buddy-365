@@ -1,0 +1,1 @@
+ALTER TABLE public.client_boletos ADD CONSTRAINT client_boletos_ixc_boleto_id_key UNIQUE (ixc_boleto_id);
