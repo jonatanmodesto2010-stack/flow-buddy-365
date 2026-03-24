@@ -1,61 +1,79 @@
 
 
-## Plano: Bloqueados sem paginação + auto-reload pós-sync
+## Plano: Refatorar sync de boletos para buscar via contratos
+
+### Problema confirmado
+O sync atual busca todos os registros de `fn_areceber` do IXC e mapeia cada boleto para uma timeline local via `id_cliente` (linha 865-867). Boletos cujo `id_cliente` no IXC não corresponde diretamente ao `client_id` local são silenciosamente descartados. Isso causa boletos faltando (ex: cliente 2159).
+
+### Solução
+Adicionar um mapa secundário `contrato → timeline_id` construído a partir dos contratos do IXC (`cliente_contrato`), para que boletos que não mapeiem via `id_cliente` possam ser mapeados via `id_contrato`.
 
 ### Arquivo alterado
-- `src/pages/Clients.tsx` (único arquivo)
+- `supabase/functions/ixc-sync/index.ts`
 
-### 1. Flag derivada
+### Alterações detalhadas
 
-```ts
-const isBlockedView = statusFilter === 'blocked';
-```
-
-### 2. Refatorar `loadClients()`
-
-**Modo normal** (quando `!isBlockedView`): manter exatamente como está — query com `.range(start, end)` e `ITEMS_PER_PAGE = 30`.
-
-**Modo bloqueados** (quando `isBlockedView`): buscar todos os registros em chunks de 1000 usando loop com `.range()`:
-- Montar a mesma query base com filtros (organização, busca, filial, status blocked)
-- Executar em loop: `.range(0, 999)`, `.range(1000, 1999)`, etc., até receber menos de 1000 registros
-- Concatenar todos os resultados
-- Para o count, usar o primeiro request com `{ count: 'exact' }` para obter `totalCount`
-- Setar `clients = allResults`
-
-### 3. Ajustar cálculos de paginação
-
-```ts
-const totalPages = isBlockedView ? 1 : Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
-const startIndex = isBlockedView ? 0 : (currentPage - 1) * ITEMS_PER_PAGE;
-const endIndex = isBlockedView ? totalCount : Math.min(startIndex + clients.length, totalCount);
-```
-
-### 4. Esconder botões de navegação
-
-Envolver os 4 botões de paginação (`<<`, `<`, `>`, `>>`) em `{!isBlockedView && (...)}`. Manter o botão refresh, history e plus visíveis.
-
-### 5. Processamento auxiliar em chunks
-
-`loadOverdueDays` e `loadLatestEvents` fazem `.in('timeline_id', timelineIds)`. Para listas grandes (>200 IDs), usar `fetchInChunks` já existente em `supabase-helpers.ts` para dividir a consulta. `loadOnlineStatus` já passa `client_ids` para a edge function, que processa internamente — sem alteração necessária.
-
-### 6. Auto-reload pós-sync
+#### 1. No bloco SYNC BOLETOS (linha ~805-810), após carregar timelines e construir `clientToTimeline`
 
 Adicionar:
-- State: `lastCompletedSyncAt: string | null`
-- `useEffect` com `setInterval` de 60s que consulta:
-  ```sql
-  SELECT completed_at FROM integration_sync_log
-  WHERE organization_id = ? AND status = 'completed'
-  ORDER BY completed_at DESC LIMIT 1
-  ```
-- Na primeira leitura, apenas salva o valor sem recarregar
-- Nas leituras seguintes, se `completed_at` for diferente e mais recente, atualiza state e chama `loadClients()`
-- Cleanup no unmount
+- Buscar todos os contratos do IXC via `fetchAllIxcRecords(contractsUrl || api_url, token, 'cliente_contrato')`
+- Construir mapa `contractToTimeline: Map<string, string>` onde para cada contrato, `id_contrato → timeline_id` (usando `contrato.id_cliente → clientToTimeline`)
+- Logar quantos contratos foram mapeados
+
+```text
+contractsUrl = integration.api_url_contracts || api_url
+contracts = fetchAllIxcRecords(contractsUrl, token, 'cliente_contrato')
+contractToTimeline = new Map()
+for each contract:
+  clientId = String(contract.id_cliente)
+  timelineId = clientToTimeline.get(clientId)
+  if timelineId:
+    contractToTimeline.set(String(contract.id), timelineId)
+```
+
+#### 2. Na callback de processamento de boletos (linha ~864-867)
+
+Alterar a resolução de `timelineId` para usar fallback via contrato:
+
+```text
+// Antes:
+const timelineId = clientToTimeline.get(clientId);
+if (!timelineId) continue;
+
+// Depois:
+let timelineId = clientToTimeline.get(clientId);
+if (!timelineId) {
+  const contratoId = String(boleto.id_contrato || '');
+  timelineId = contractToTimeline.get(contratoId);
+}
+if (!timelineId) {
+  unmappedCount++;
+  continue;
+}
+```
+
+#### 3. Adicionar contador de boletos não mapeados
+
+- Criar variável `let unmappedCount = 0` antes do stream processing
+- Após o stream, logar: `console.log(\`[sync_boletos] ${unmappedCount} boletos sem mapeamento\`)`
+- Incluir `unmappedCount` no `sync_metadata` do log
+
+#### 4. Replicar a mesma lógica no bloco SYNC ARECEBER (linha ~1042-1048)
+
+O bloco `sync_areceber` (action `sync_areceber`) tem a mesma lógica de mapeamento por `id_cliente`. Aplicar a mesma correção de fallback via contrato.
 
 ### O que NÃO muda
-- Layout visual dos cards
-- Edge functions
-- Sincronização IXC
-- Calendário
-- Filtros Todos/Ativos/Inativos/Finalizados (paginação de 30)
+- Layout da página de Clientes
+- Lógica de sync de clientes
+- Mapeamento de status de boletos (`pago`, `pendente`, `cancelado`)
+- Estrutura da tabela `client_boletos`
+- Edge functions de diagnóstico
+
+### Por que isso resolve
+O boleto de março/2026 da cliente 2159 tem `id_contrato` no IXC que aponta para o `id_cliente = 2159`. Hoje o sync tenta mapear direto via `id_cliente` do boleto, que pode divergir. Com o fallback via contrato, o sync resolve `id_contrato → id_cliente → timeline_id`, garantindo que o boleto entre no banco local.
+
+### Cuidados de performance
+- `cliente_contrato` é uma tabela pequena (já buscada no sync de clientes) — custo mínimo
+- O mapa `contractToTimeline` é construído uma vez antes do stream, sem impacto no loop principal
+- Nenhum request adicional ao IXC por boleto individual
 
