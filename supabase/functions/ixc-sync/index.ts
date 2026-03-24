@@ -880,8 +880,15 @@ Deno.serve(async (req) => {
 
               for (const boleto of registros) {
                 const clientId = String(boleto.id_cliente);
-                const timelineId = clientToTimeline.get(clientId);
-                if (!timelineId) continue;
+                let timelineId = clientToTimeline.get(clientId);
+                if (!timelineId) {
+                  const contratoId = String(boleto.id_contrato || '');
+                  if (contratoId) timelineId = contractToTimeline.get(contratoId);
+                }
+                if (!timelineId) {
+                  unmappedBoletoCount++;
+                  continue;
+                }
 
                 const ixcBoletoId = String(boleto.id);
                 const valor = parseFloat(boleto.valor || '0');
