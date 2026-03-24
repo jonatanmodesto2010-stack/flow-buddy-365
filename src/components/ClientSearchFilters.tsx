@@ -433,6 +433,15 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName, 
               />
             </Badge>
           )}
+          {filters.filialFilter !== 'all' && (
+            <Badge variant="secondary" className="gap-1">
+              Filial: {filiais.find(([id]) => id === filters.filialFilter)?.[1] || filters.filialFilter}
+              <X
+                className="w-3 h-3 cursor-pointer"
+                onClick={() => applyFilters({ filialFilter: 'all' })}
+              />
+            </Badge>
+          )}
         </div>
       )}
     </div>
