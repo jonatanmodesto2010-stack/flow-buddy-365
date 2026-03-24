@@ -222,13 +222,16 @@ const Clients = () => {
       setOverdueDaysLoading(true);
       const timelineIds = timelines.map((t) => t.id);
 
-      const { data: boletos } = await supabaseClient.
-      from('client_boletos').
-      select('timeline_id, due_date, status').
-      in('timeline_id', timelineIds);
+      // Use fetchInChunks for large lists
+      const boletos = timelineIds.length > 200
+        ? await fetchInChunks('client_boletos', 'timeline_id', timelineIds, 'timeline_id, due_date, status')
+        : await (async () => {
+            const { data } = await supabaseClient.from('client_boletos').select('timeline_id, due_date, status').in('timeline_id', timelineIds);
+            return data || [];
+          })();
 
       const boletosMap = new Map<string, {due_date: string;status: string;}[]>();
-      for (const b of boletos || []) {
+      for (const b of boletos) {
         if (!boletosMap.has(b.timeline_id)) boletosMap.set(b.timeline_id, []);
         boletosMap.get(b.timeline_id)!.push(b);
       }
