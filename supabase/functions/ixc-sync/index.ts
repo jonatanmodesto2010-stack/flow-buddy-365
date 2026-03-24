@@ -954,6 +954,10 @@ Deno.serve(async (req) => {
             }
           }
 
+          if (unmappedBoletoCount > 0) {
+            console.log(`[sync_boletos] ${unmappedBoletoCount} boletos sem mapeamento (nem por id_cliente nem por id_contrato)`);
+          }
+
           metrics.pagesProcessed += streamResult.pagesProcessed;
           metrics.totalRecordsFromIxc = streamResult.totalRecords;
           metrics.durations.push({ phase: 'Fetch+classify boletos', seconds: (Date.now() - fetchStart) / 1000 });
