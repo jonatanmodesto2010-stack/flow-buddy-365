@@ -679,7 +679,7 @@ Deno.serve(async (req) => {
             const clientName = client.razao || client.fantasia || `Cliente ${client.id}`;
             const contract = contractMap.get(clientIdStr);
             const isClientActive = client.ativo === 'S';
-            const filialId = client.id_filial ? String(client.id_filial) : null;
+            const filialId = client.filial_id ? String(client.filial_id) : null;
             const filialName = filialId ? (filialMap.get(filialId) || `Filial ${filialId}`) : null;
 
             let isActive = true;
