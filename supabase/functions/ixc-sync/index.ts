@@ -364,7 +364,7 @@ Deno.serve(async (req) => {
         results.client_fields = registros.map((r: any) => {
           const picked: any = { id: r.id, razao: r.razao, ativo: r.ativo };
           for (const k of Object.keys(r)) {
-            if (k.includes('bloq') || k.includes('status') || k.includes('acesso') || k.includes('suspen')) picked[k] = r[k];
+            if (k.includes('bloq') || k.includes('status') || k.includes('acesso') || k.includes('suspen') || k.includes('filial')) picked[k] = r[k];
           }
           return picked;
         });
@@ -679,7 +679,7 @@ Deno.serve(async (req) => {
             const clientName = client.razao || client.fantasia || `Cliente ${client.id}`;
             const contract = contractMap.get(clientIdStr);
             const isClientActive = client.ativo === 'S';
-            const filialId = client.id_filial ? String(client.id_filial) : null;
+            const filialId = client.filial_id ? String(client.filial_id) : null;
             const filialName = filialId ? (filialMap.get(filialId) || `Filial ${filialId}`) : null;
 
             let isActive = true;
