@@ -78,6 +78,7 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName, 
       timelineFilter: 'all',
       iconsFilter: [],
       sortBy: 'default',
+      filialFilter: 'all',
     });
   };
 
