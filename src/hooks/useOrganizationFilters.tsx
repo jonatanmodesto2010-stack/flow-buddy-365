@@ -15,6 +15,7 @@ export interface FilterValues {
   timelineFilter: string;
   iconsFilter: string[];
   sortBy: string;
+  filialFilter: string;
 }
 
 const DEFAULT_FILTERS: FilterValues = {
@@ -29,6 +30,7 @@ const DEFAULT_FILTERS: FilterValues = {
   timelineFilter: 'all',
   iconsFilter: [],
   sortBy: 'default',
+  filialFilter: 'all',
 };
 
 export const useOrganizationFilters = (pageName: string) => {

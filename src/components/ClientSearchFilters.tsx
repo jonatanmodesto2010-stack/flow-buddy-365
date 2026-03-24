@@ -19,9 +19,10 @@ interface ClientSearchFiltersProps {
   onFilterChange: (filters: FilterValues) => void;
   organizationId: string | null;
   pageName: string;
+  filiais?: [string, string][];
 }
 
-export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }: ClientSearchFiltersProps) => {
+export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName, filiais = [] }: ClientSearchFiltersProps) => {
   const { filters, updateFilters, isLoading } = useOrganizationFilters(pageName);
   const { icons: orgIcons, loading: iconsLoading } = useOrganizationIcons(organizationId);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -77,6 +78,7 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
       timelineFilter: 'all',
       iconsFilter: [],
       sortBy: 'default',
+      filialFilter: 'all',
     });
   };
 
@@ -103,6 +105,7 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
     filters.timelineFilter !== 'all',
     filters.iconsFilter.length > 0,
     filters.sortBy !== 'default',
+    filters.filialFilter !== 'all',
   ].filter(Boolean).length;
 
   const availableIcons = orgIcons.length > 0
@@ -176,6 +179,24 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Filial */}
+              {filiais.length > 0 && (
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Filial</label>
+                  <Select value={filters.filialFilter} onValueChange={(value) => applyFilters({ filialFilter: value })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas filiais</SelectItem>
+                      {filiais.map(([id, name]) => (
+                        <SelectItem key={id} value={id}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Ordenação */}
               <div>
@@ -409,6 +430,15 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }
               <X
                 className="w-3 h-3 cursor-pointer"
                 onClick={() => applyFilters({ sortBy: 'default' })}
+              />
+            </Badge>
+          )}
+          {filters.filialFilter !== 'all' && (
+            <Badge variant="secondary" className="gap-1">
+              Filial: {filiais.find(([id]) => id === filters.filialFilter)?.[1] || filters.filialFilter}
+              <X
+                className="w-3 h-3 cursor-pointer"
+                onClick={() => applyFilters({ filialFilter: 'all' })}
               />
             </Badge>
           )}
