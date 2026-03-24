@@ -364,7 +364,7 @@ Deno.serve(async (req) => {
         results.client_fields = registros.map((r: any) => {
           const picked: any = { id: r.id, razao: r.razao, ativo: r.ativo };
           for (const k of Object.keys(r)) {
-            if (k.includes('bloq') || k.includes('status') || k.includes('acesso') || k.includes('suspen')) picked[k] = r[k];
+            if (k.includes('bloq') || k.includes('status') || k.includes('acesso') || k.includes('suspen') || k.includes('filial')) picked[k] = r[k];
           }
           return picked;
         });
