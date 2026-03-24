@@ -105,6 +105,7 @@ export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName, 
     filters.timelineFilter !== 'all',
     filters.iconsFilter.length > 0,
     filters.sortBy !== 'default',
+    filters.filialFilter !== 'all',
   ].filter(Boolean).length;
 
   const availableIcons = orgIcons.length > 0
