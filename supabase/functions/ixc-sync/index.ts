@@ -809,6 +809,23 @@ Deno.serve(async (req) => {
             if (t.client_id) clientToTimeline.set(t.client_id, t.id);
           }
 
+          // Build contract-to-timeline map for fallback mapping
+          const contractsUrl = integration.api_url_contracts || api_url;
+          let contractToTimeline = new Map<string, string>();
+          try {
+            const contracts = await fetchAllIxcRecords(contractsUrl, token, 'cliente_contrato');
+            for (const c of contracts) {
+              const cClientId = String(c.id_cliente || '');
+              const tId = clientToTimeline.get(cClientId);
+              if (tId) contractToTimeline.set(String(c.id), tId);
+            }
+            console.log(`[sync_boletos] Contract map built: ${contractToTimeline.size} contracts mapped to timelines`);
+          } catch (e: any) {
+            console.log(`[sync_boletos] Could not fetch contracts for fallback mapping: ${e.message}`);
+          }
+
+          let unmappedBoletoCount = 0;
+
           // For incremental mode with few expected changes, load only needed existing boletos
           // For full scan, load all existing boletos
           // TODO: NEXT OPTIMIZATION - For orgs with >50k boletos in full scan mode,
