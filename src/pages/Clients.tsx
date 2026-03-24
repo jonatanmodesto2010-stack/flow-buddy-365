@@ -509,20 +509,6 @@ const Clients = () => {
                   <span className="text-sm text-muted-foreground">
                     {totalCount > 0 ? `${startIndex + 1} - ${endIndex} / ${totalCount}` : '0 clientes'}
                   </span>
-                  {filiais.length > 0 &&
-                <Select value={filialFilter} onValueChange={setFilialFilter}>
-                      <SelectTrigger className="w-[220px] h-9">
-                        <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
-                        <SelectValue placeholder="Todas filiais" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas filiais</SelectItem>
-                        {filiais.map(([id, name]) =>
-                    <SelectItem key={id} value={id}>{name}</SelectItem>
-                    )}
-                      </SelectContent>
-                    </Select>
-                }
                 </div>
 
                 <ClientSearchFilters
@@ -530,9 +516,11 @@ const Clients = () => {
                   setSearchTerm(filters.searchTerm || '');
                   setStatusFilter(filters.statusFilter || 'all');
                   setSortBy((filters.sortBy as any) || 'default');
+                  setFilialFilter(filters.filialFilter || 'all');
                 }}
                 organizationId={organizationId}
-                pageName="clients" />
+                pageName="clients"
+                filiais={filiais} />
               
 
                 {/* Pagination Controls */}
