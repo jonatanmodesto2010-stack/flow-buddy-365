@@ -538,21 +538,29 @@ const Clients = () => {
                 {/* Pagination Controls */}
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <div className="flex items-center gap-1">
-                    <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Primeira página">
-                      <ChevronsLeft size={16} />
-                    </button>
-                    <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Página anterior">
-                      <ChevronLeft size={16} />
-                    </button>
+                    {!isBlockedView && (
+                      <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Primeira página">
+                        <ChevronsLeft size={16} />
+                      </button>
+                    )}
+                    {!isBlockedView && (
+                      <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Página anterior">
+                        <ChevronLeft size={16} />
+                      </button>
+                    )}
                     <button onClick={loadClients} className="p-1.5 rounded hover:bg-muted transition-colors" title="Atualizar">
                       <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                     </button>
-                    <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Próxima página">
-                      <ChevronRight size={16} />
-                    </button>
-                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Última página">
-                      <ChevronsRight size={16} />
-                    </button>
+                    {!isBlockedView && (
+                      <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Próxima página">
+                        <ChevronRight size={16} />
+                      </button>
+                    )}
+                    {!isBlockedView && (
+                      <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1.5 rounded hover:bg-muted disabled:opacity-30 transition-colors" title="Última página">
+                        <ChevronsRight size={16} />
+                      </button>
+                    )}
                    </div>
 
                   <div className="flex items-center gap-3">
