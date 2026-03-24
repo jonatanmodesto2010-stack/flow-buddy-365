@@ -19,6 +19,7 @@ interface ClientSearchFiltersProps {
   onFilterChange: (filters: FilterValues) => void;
   organizationId: string | null;
   pageName: string;
+  filiais?: [string, string][];
 }
 
 export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }: ClientSearchFiltersProps) => {
