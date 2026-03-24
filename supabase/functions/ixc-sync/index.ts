@@ -1098,7 +1098,18 @@ Deno.serve(async (req) => {
             api_url, token, 'fn_areceber', supabase, syncId,
             async (registros) => {
               for (const item of registros) {
-                const clientId = String(item.id_cliente);
+                let clientId = String(item.id_cliente);
+                // Fallback via contrato if client not known
+                if (!knownClientIds.has(clientId)) {
+                  const contratoId = String(item.id_contrato || '');
+                  const fallbackTimeline = contratoId ? contractToTimelineAR.get(contratoId) : undefined;
+                  if (fallbackTimeline) {
+                    // Find the clientId that maps to this timeline
+                    for (const [cid, tid] of clientToTimeline) {
+                      if (tid === fallbackTimeline) { clientId = cid; break; }
+                    }
+                  }
+                }
                 const valorAberto = parseFloat(item.valor_aberto || item.valor || '0');
                 debtPerClient.set(clientId, (debtPerClient.get(clientId) || 0) + valorAberto);
                 if (!knownClientIds.has(clientId)) newClientIds.add(clientId);
