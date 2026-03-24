@@ -1075,6 +1075,21 @@ Deno.serve(async (req) => {
             if (t.client_id) { clientToTimeline.set(t.client_id, t.id); knownClientIds.add(t.client_id); }
           }
 
+          // Build contract-to-timeline map for fallback mapping (areceber)
+          const contractsUrlAR = integration.api_url_contracts || api_url;
+          let contractToTimelineAR = new Map<string, string>();
+          try {
+            const contractsAR = await fetchAllIxcRecords(contractsUrlAR, token, 'cliente_contrato');
+            for (const c of contractsAR) {
+              const cClientId = String(c.id_cliente || '');
+              const tId = clientToTimeline.get(cClientId);
+              if (tId) contractToTimelineAR.set(String(c.id), tId);
+            }
+            console.log(`[sync_areceber] Contract map built: ${contractToTimelineAR.size} contracts mapped`);
+          } catch (e: any) {
+            console.log(`[sync_areceber] Could not fetch contracts: ${e.message}`);
+          }
+
           // Stream process pending receivables
           const debtPerClient = new Map<string, number>();
           const newClientIds = new Set<string>();
