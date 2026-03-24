@@ -22,7 +22,7 @@ interface ClientSearchFiltersProps {
   filiais?: [string, string][];
 }
 
-export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName }: ClientSearchFiltersProps) => {
+export const ClientSearchFilters = ({ onFilterChange, organizationId, pageName, filiais = [] }: ClientSearchFiltersProps) => {
   const { filters, updateFilters, isLoading } = useOrganizationFilters(pageName);
   const { icons: orgIcons, loading: iconsLoading } = useOrganizationIcons(organizationId);
   const [tags, setTags] = useState<Tag[]>([]);
