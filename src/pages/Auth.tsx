@@ -5,9 +5,124 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { useTheme } from '@/contexts/ThemeContext';
 import { authSchema } from '@/lib/validations';
 import { z } from 'zod';
+import { Eye, EyeOff, Sun, Moon, TrendingUp, Users, BarChart3, PieChart } from 'lucide-react';
+
+const DashboardShowcase = () => (
+  <div className="hidden md:flex w-[60%] relative overflow-hidden bg-gradient-to-br from-[#0f0a2e] via-[#1a1145] to-[#0d1b3e] flex-col justify-center items-center p-12">
+    {/* Decorative stars/dots */}
+    {Array.from({ length: 30 }).map((_, i) => (
+      <div
+        key={i}
+        className="absolute rounded-full bg-white"
+        style={{
+          width: `${Math.random() * 3 + 1}px`,
+          height: `${Math.random() * 3 + 1}px`,
+          top: `${Math.random() * 100}%`,
+          left: `${Math.random() * 100}%`,
+          opacity: Math.random() * 0.4 + 0.1,
+        }}
+      />
+    ))}
+
+    {/* Glow effect */}
+    <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[120px]" />
+
+    {/* Dashboard mockup cards */}
+    <div className="relative z-10 w-full max-w-lg space-y-4">
+      {/* Top row - Stats cards */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/10">
+          <div className="flex items-center gap-2 mb-2">
+            <Users size={14} className="text-purple-300" />
+            <span className="text-[10px] text-purple-200/70 uppercase tracking-wider">Clientes</span>
+          </div>
+          <p className="text-xl font-bold text-white">1.248</p>
+          <p className="text-[10px] text-emerald-400 mt-1">+12% este mês</p>
+        </div>
+        <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/10">
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingUp size={14} className="text-blue-300" />
+            <span className="text-[10px] text-purple-200/70 uppercase tracking-wider">Cobranças</span>
+          </div>
+          <p className="text-xl font-bold text-white">R$ 84k</p>
+          <p className="text-[10px] text-emerald-400 mt-1">+8% vs anterior</p>
+        </div>
+        <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/10">
+          <div className="flex items-center gap-2 mb-2">
+            <BarChart3 size={14} className="text-cyan-300" />
+            <span className="text-[10px] text-purple-200/70 uppercase tracking-wider">Taxa</span>
+          </div>
+          <p className="text-xl font-bold text-white">94.2%</p>
+          <p className="text-[10px] text-emerald-400 mt-1">Meta atingida</p>
+        </div>
+      </div>
+
+      {/* Chart card */}
+      <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/10">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-xs text-purple-200/80 font-medium">Análise mensal</span>
+          <PieChart size={14} className="text-purple-300" />
+        </div>
+        {/* Fake bar chart */}
+        <div className="flex items-end gap-2 h-24">
+          {[60, 80, 45, 90, 70, 95, 55, 85, 75, 92, 68, 88].map((h, i) => (
+            <div
+              key={i}
+              className="flex-1 rounded-t-sm"
+              style={{
+                height: `${h}%`,
+                background: i === 5 || i === 9
+                  ? 'linear-gradient(to top, #8b5cf6, #a78bfa)'
+                  : 'rgba(255,255,255,0.15)',
+              }}
+            />
+          ))}
+        </div>
+        <div className="flex justify-between mt-2">
+          <span className="text-[9px] text-purple-200/50">Jan</span>
+          <span className="text-[9px] text-purple-200/50">Jun</span>
+          <span className="text-[9px] text-purple-200/50">Dez</span>
+        </div>
+      </div>
+
+      {/* Ranking table */}
+      <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/10">
+        <span className="text-xs text-purple-200/80 font-medium">Top operadores</span>
+        <div className="mt-3 space-y-2">
+          {['Ana Silva', 'Carlos Mendes', 'Julia Costa'].map((name, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <div className="w-6 h-6 rounded-full bg-purple-500/30 flex items-center justify-center text-[10px] text-white font-bold">
+                {i + 1}
+              </div>
+              <span className="text-xs text-white/80 flex-1">{name}</span>
+              <div className="h-1.5 w-20 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-purple-500 to-blue-400"
+                  style={{ width: `${95 - i * 15}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    {/* Marketing text */}
+    <div className="relative z-10 mt-8 text-center max-w-md">
+      <h2 className="text-2xl font-bold text-white mb-2">
+        Novo formato de análise de dados
+      </h2>
+      <p className="text-sm text-purple-200/70">
+        Gráficos interativos e filtros inteligentes que transformam seus dados em decisões
+      </p>
+    </div>
+  </div>
+);
 
 const Auth = () => {
   const [isLogin] = useState(true);
@@ -19,17 +134,26 @@ const Auth = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberEmail, setRememberEmail] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
-    // Check if user is in reset password mode
+    const remembered = localStorage.getItem('remembered_email');
+    if (remembered) {
+      setEmail(remembered);
+      setRememberEmail(true);
+    }
+  }, []);
+
+  useEffect(() => {
     const resetParam = searchParams.get('reset');
     if (resetParam === 'true') {
       setIsResetMode(true);
       setIsForgotPassword(false);
-      // isLogin is always true now (no public signup)
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -53,7 +177,6 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      // Validate email only
       z.object({ email: authSchema.shape.email }).parse({ email });
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -68,7 +191,6 @@ const Auth = () => {
       });
       
       setIsForgotPassword(false);
-      // back to login view
       setEmail('');
     } catch (error: any) {
       if (error instanceof z.ZodError) {
@@ -97,7 +219,6 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      // Validate password and confirm match
       authSchema.shape.password.parse(password);
 
       if (password !== confirmPassword) {
@@ -145,7 +266,6 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      // Validar inputs
       const validationData = isLogin 
         ? { email, password }
         : { email, password, fullName };
@@ -159,6 +279,13 @@ const Auth = () => {
         });
 
         if (error) throw error;
+
+        // Handle remember email
+        if (rememberEmail) {
+          localStorage.setItem('remembered_email', email);
+        } else {
+          localStorage.removeItem('remembered_email');
+        }
 
         toast({
           title: 'Login realizado com sucesso!',
@@ -182,7 +309,6 @@ const Auth = () => {
           title: 'Cadastro realizado!',
           description: 'Você já pode fazer login.',
         });
-        // signup disabled
       }
     } catch (error: any) {
       if (error instanceof z.ZodError) {
@@ -205,191 +331,271 @@ const Auth = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
-      >
-        <div className="bg-card border border-border rounded-2xl shadow-2xl p-8">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-foreground mb-2">
-              {isResetMode 
-                ? 'Redefinir Senha' 
-                : isForgotPassword 
-                ? 'Recuperar Senha' 
-                : isLogin 
-                ? 'Bem-vindo' 
-                : 'Criar Conta'}
-            </h1>
-            <p className="text-muted-foreground">
-              {isResetMode
-                ? 'Digite sua nova senha'
-                : isForgotPassword
-                ? 'Digite seu email para receber o link de recuperação'
-                : isLogin
-                ? 'Entre para gerenciar suas ocorrências'
-                : 'Cadastre-se para começar'}
-            </p>
-          </div>
-
-          {isResetMode ? (
-            <form onSubmit={handleResetPassword} className="space-y-4">
-              <div>
-                <Label htmlFor="password">Nova Senha</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  placeholder="••••••••"
-                  minLength={6}
-                  className={errors.password ? 'border-destructive' : ''}
-                />
-                {errors.password && (
-                  <p className="text-sm text-destructive mt-1">{errors.password}</p>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="confirmPassword">Confirmar Senha</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  placeholder="••••••••"
-                  minLength={6}
-                  className={errors.confirmPassword ? 'border-destructive' : ''}
-                />
-                {errors.confirmPassword && (
-                  <p className="text-sm text-destructive mt-1">{errors.confirmPassword}</p>
-                )}
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Carregando...' : 'Redefinir Senha'}
-              </Button>
-            </form>
-          ) : isForgotPassword ? (
-            <form onSubmit={handleForgotPassword} className="space-y-4">
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  placeholder="seu@email.com"
-                  className={errors.email ? 'border-destructive' : ''}
-                />
-                {errors.email && (
-                  <p className="text-sm text-destructive mt-1">{errors.email}</p>
-                )}
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Carregando...' : 'Enviar Link de Recuperação'}
-              </Button>
-
-              <div className="mt-6 text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsForgotPassword(false);
-                    setErrors({});
-                  }}
-                  className="text-sm text-primary hover:underline"
-                >
-                  Voltar para login
-                </button>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={handleAuth} className="space-y-4">
-              {!isLogin && (
-                <div>
-                  <Label htmlFor="fullName">Nome Completo</Label>
-                  <Input
-                    id="fullName"
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    required={!isLogin}
-                    placeholder="Seu nome"
-                    className={errors.fullName ? 'border-destructive' : ''}
-                  />
-                  {errors.fullName && (
-                    <p className="text-sm text-destructive mt-1">{errors.fullName}</p>
-                  )}
-                </div>
-              )}
-
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  placeholder="seu@email.com"
-                  className={errors.email ? 'border-destructive' : ''}
-                />
-                {errors.email && (
-                  <p className="text-sm text-destructive mt-1">{errors.email}</p>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="password">Senha</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  placeholder="••••••••"
-                  minLength={6}
-                  className={errors.password ? 'border-destructive' : ''}
-                />
-                {errors.password && (
-                  <p className="text-sm text-destructive mt-1">{errors.password}</p>
-                )}
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={loading}
-              >
-                {loading ? 'Carregando...' : isLogin ? 'Entrar' : 'Cadastrar'}
-              </Button>
-
-              {isLogin && (
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsForgotPassword(true);
-                      setErrors({});
-                    }}
-                    className="text-sm text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    Esqueci minha senha
-                  </button>
-                </div>
-              )}
-            </form>
+  const renderLoginForm = () => (
+    <form onSubmit={handleAuth} className="space-y-5">
+      {!isLogin && (
+        <div className="space-y-2">
+          <Label htmlFor="fullName">Nome Completo</Label>
+          <Input
+            id="fullName"
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            required={!isLogin}
+            placeholder="Seu nome"
+            className={`h-11 rounded-xl bg-muted/50 border-border/50 transition-all focus:ring-2 focus:ring-primary/50 focus:shadow-lg ${errors.fullName ? 'border-destructive' : ''}`}
+          />
+          {errors.fullName && (
+            <p className="text-sm text-destructive">{errors.fullName}</p>
           )}
-
-          {/* Signup público desabilitado - criação apenas por admin */}
         </div>
-      </motion.div>
+      )}
+
+      <div className="space-y-2">
+        <Label htmlFor="email">E-mail</Label>
+        <Input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          placeholder="seu@email.com"
+          className={`h-11 rounded-xl bg-muted/50 border-border/50 transition-all focus:ring-2 focus:ring-primary/50 focus:shadow-lg ${errors.email ? 'border-destructive' : ''}`}
+        />
+        {errors.email && (
+          <p className="text-sm text-destructive">{errors.email}</p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="password">Senha</Label>
+        <div className="relative">
+          <Input
+            id="password"
+            type={showPassword ? 'text' : 'password'}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            placeholder="••••••••"
+            minLength={6}
+            className={`h-11 rounded-xl bg-muted/50 border-border/50 pr-10 transition-all focus:ring-2 focus:ring-primary/50 focus:shadow-lg ${errors.password ? 'border-destructive' : ''}`}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            tabIndex={-1}
+          >
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
+        {errors.password && (
+          <p className="text-sm text-destructive">{errors.password}</p>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="remember"
+            checked={rememberEmail}
+            onCheckedChange={(checked) => setRememberEmail(checked === true)}
+          />
+          <label htmlFor="remember" className="text-sm text-muted-foreground cursor-pointer">
+            Lembrar e-mail
+          </label>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setIsForgotPassword(true);
+            setErrors({});
+          }}
+          className="text-sm text-primary hover:underline transition-colors"
+        >
+          Esqueceu a senha?
+        </button>
+      </div>
+
+      <Button
+        type="submit"
+        className="w-full h-11 rounded-xl bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-semibold transition-all hover:shadow-[0_0_20px_rgba(139,92,246,0.3)]"
+        disabled={loading}
+      >
+        {loading ? 'Carregando...' : isLogin ? 'Entrar' : 'Cadastrar'}
+      </Button>
+    </form>
+  );
+
+  const renderForgotForm = () => (
+    <form onSubmit={handleForgotPassword} className="space-y-5">
+      <div className="space-y-2">
+        <Label htmlFor="email">E-mail</Label>
+        <Input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          placeholder="seu@email.com"
+          className={`h-11 rounded-xl bg-muted/50 border-border/50 transition-all focus:ring-2 focus:ring-primary/50 focus:shadow-lg ${errors.email ? 'border-destructive' : ''}`}
+        />
+        {errors.email && (
+          <p className="text-sm text-destructive">{errors.email}</p>
+        )}
+      </div>
+
+      <Button
+        type="submit"
+        className="w-full h-11 rounded-xl bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-semibold transition-all hover:shadow-[0_0_20px_rgba(139,92,246,0.3)]"
+        disabled={loading}
+      >
+        {loading ? 'Carregando...' : 'Enviar Link de Recuperação'}
+      </Button>
+
+      <div className="text-center">
+        <button
+          type="button"
+          onClick={() => {
+            setIsForgotPassword(false);
+            setErrors({});
+          }}
+          className="text-sm text-primary hover:underline"
+        >
+          Voltar para login
+        </button>
+      </div>
+    </form>
+  );
+
+  const renderResetForm = () => (
+    <form onSubmit={handleResetPassword} className="space-y-5">
+      <div className="space-y-2">
+        <Label htmlFor="password">Nova Senha</Label>
+        <div className="relative">
+          <Input
+            id="password"
+            type={showPassword ? 'text' : 'password'}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            placeholder="••••••••"
+            minLength={6}
+            className={`h-11 rounded-xl bg-muted/50 border-border/50 pr-10 transition-all focus:ring-2 focus:ring-primary/50 focus:shadow-lg ${errors.password ? 'border-destructive' : ''}`}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            tabIndex={-1}
+          >
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
+        {errors.password && (
+          <p className="text-sm text-destructive">{errors.password}</p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+        <Input
+          id="confirmPassword"
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          required
+          placeholder="••••••••"
+          minLength={6}
+          className={`h-11 rounded-xl bg-muted/50 border-border/50 transition-all focus:ring-2 focus:ring-primary/50 focus:shadow-lg ${errors.confirmPassword ? 'border-destructive' : ''}`}
+        />
+        {errors.confirmPassword && (
+          <p className="text-sm text-destructive">{errors.confirmPassword}</p>
+        )}
+      </div>
+
+      <Button
+        type="submit"
+        className="w-full h-11 rounded-xl bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-semibold transition-all hover:shadow-[0_0_20px_rgba(139,92,246,0.3)]"
+        disabled={loading}
+      >
+        {loading ? 'Carregando...' : 'Redefinir Senha'}
+      </Button>
+    </form>
+  );
+
+  const getTitle = () => {
+    if (isResetMode) return 'Redefinir Senha';
+    if (isForgotPassword) return 'Recuperar Senha';
+    return 'Entre em sua conta';
+  };
+
+  const getSubtitle = () => {
+    if (isResetMode) return 'Digite sua nova senha para continuar';
+    if (isForgotPassword) return 'Digite seu email para receber o link de recuperação';
+    return 'Gerencie seus clientes e operações com eficiência';
+  };
+
+  return (
+    <div className="min-h-screen flex">
+      <DashboardShowcase />
+
+      {/* Right column - Login */}
+      <div className="w-full md:w-[40%] flex flex-col bg-background">
+        {/* Top bar */}
+        <div className="flex items-center justify-end gap-3 p-4">
+          <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+            🇧🇷 Português
+          </span>
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+        </div>
+
+        {/* Form container */}
+        <div className="flex-1 flex items-center justify-center px-6 md:px-12">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="w-full max-w-sm"
+          >
+            {/* Logo */}
+            <div className="flex justify-center mb-8">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600 to-purple-400 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                <BarChart3 size={24} className="text-white" />
+              </div>
+            </div>
+
+            {/* Title */}
+            <div className="text-center mb-8">
+              <h1 className="text-2xl font-bold text-foreground mb-1">
+                {getTitle()}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {getSubtitle()}
+              </p>
+            </div>
+
+            {/* Forms */}
+            {isResetMode
+              ? renderResetForm()
+              : isForgotPassword
+              ? renderForgotForm()
+              : renderLoginForm()}
+          </motion.div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 text-center">
+          <p className="text-xs text-muted-foreground/50">
+            © {new Date().getFullYear()} Sistema de Gestão
+          </p>
+        </div>
+      </div>
     </div>
   );
 };
