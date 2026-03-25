@@ -32,10 +32,6 @@ const DashboardShowcase = () => (
     {/* Glow effect */}
     <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[120px]" />
 
-    {/* Logo */}
-    <div className="relative z-10 mb-8">
-      <img src="/images/logo-provedor-ligado.png" alt="Provedor Ligado" className="w-48 mx-auto drop-shadow-lg" />
-    </div>
 
     {/* Floating screenshots */}
     <div className="relative z-10 w-full max-w-2xl h-[420px]">
