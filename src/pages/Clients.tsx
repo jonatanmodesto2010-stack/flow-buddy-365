@@ -354,7 +354,7 @@ const Clients = () => {
           // New sync detected — reload
           lastCompletedSyncAtRef.current = completedAt;
           setLastCompletedSyncAt(completedAt);
-          loadClients();
+          loadClientsRef.current();
         }
       } catch (err) {
         console.error('Error checking sync status:', err);
