@@ -480,7 +480,7 @@ export const IntegrationsSettings = () => {
                   Contas a Receber
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">A sincronização automática ocorre a cada 10 minutos via cron. Inclui descoberta de clientes via contratos.</p>
+              <p className="text-xs text-muted-foreground">A sincronização automática ocorre conforme o intervalo configurado acima. Inclui descoberta de clientes via contratos.</p>
             </div>
           )}
         </div>
