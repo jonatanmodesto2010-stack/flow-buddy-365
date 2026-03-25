@@ -1,33 +1,30 @@
 
 
-## Problem Identified: Stale Closure in Auto-Reload
+## Problem
 
-The auto-reload `useEffect` (line 330) captures a **stale version of `loadClients`** because its dependency array only includes `[organizationId]`. When the sync completes and calls `loadClients()`, it uses the filter values (`searchTerm`, `statusFilter`, `filialFilter`) from when the effect was first created -- not the current filter values.
+The connection status badge (`[7m] ✕ OFF`) is not vertically aligned with the overdue days badge (`38d ATRASO`) and the timeline button on the client card. The badges have inconsistent heights and vertical alignment.
 
-This means:
-- User sets filters (e.g. Status: Bloqueados) -- UI badges update correctly
-- Auto-sync completes, triggers `loadClients()` with **old/default filter values** (statusFilter='all')
-- Result: 1649 clients loaded ignoring the active filters, even though the filter badges still show correctly
+## Root Cause
+
+In `src/pages/Clients.tsx` (lines 609-614), the connection badge uses `px-2.5 py-1 text-xs rounded-full` making it a small pill shape, while `OverdueBadge` uses `rounded-lg min-w-[48px]` with larger padding — creating a height mismatch. The parent flex container in `ClientCard` uses `items-center` but the differing heights cause visual misalignment.
 
 ## Fix
 
-Store `loadClients` in a ref so the auto-reload effect always calls the latest version.
+**File: `src/pages/Clients.tsx`**
 
-### File: `src/pages/Clients.tsx`
+Adjust the online/offline connection badges to match the height and style of the `OverdueBadge`:
 
-1. Add a `loadClientsRef` that always points to the current `loadClients` function
-2. Update the auto-reload `useEffect` to call `loadClientsRef.current()` instead of `loadClients()`
+1. Change the connection badge layout from a horizontal pill (`rounded-full px-2.5 py-1`) to a vertical stacked layout matching `OverdueBadge` — using `flex-col items-center rounded-lg min-w-[48px]` with the duration on top and ON/OFF label below.
+
+This gives both badges consistent dimensions and the flex container aligns them properly.
 
 ```text
-// Add after loadClients definition (~line 218):
-const loadClientsRef = useRef(loadClients);
-loadClientsRef.current = loadClients;
-
-// In the auto-reload useEffect (line 354), change:
-//   loadClients();
-// to:
-//   loadClientsRef.current();
+Current (pill):    [7m] ✕ OFF
+Proposed (block):  [7m]
+                    OFF
 ```
 
-This is a minimal, targeted fix -- only 3 lines changed. The filter state will be correctly applied even when the auto-reload triggers after a sync.
+## Scope
+- 1 file changed: `src/pages/Clients.tsx` (lines 601-614)
+- Adjust both the online (green) and offline (red) badge markup
 
