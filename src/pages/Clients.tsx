@@ -599,17 +599,25 @@ const Clients = () => {
                             const isOnline = onlineClients.has(client.client_id!);
                             if (isOnline) {
                               return (
-                                <div className="px-2.5 py-1 text-xs rounded-full flex items-center gap-1 font-semibold border border-green-500/30 text-muted-foreground bg-emerald-500">
-                                  {duration && <span className="opacity-80">[{duration}]</span>}
-                                  <Wifi size={11} /> ON
+                                <div className="flex flex-col items-center justify-center rounded-lg overflow-hidden min-w-[48px] bg-emerald-500 border border-green-500/30">
+                                  <div className="w-full text-center font-bold text-lg leading-tight px-2 pt-1.5 pb-0.5 text-white">
+                                    {duration ? duration : <Wifi size={14} />}
+                                  </div>
+                                  <div className="w-full text-center font-semibold text-[9px] leading-tight px-2 pb-1.5 pt-0 uppercase tracking-wide text-white/90">
+                                    ON
+                                  </div>
                                 </div>
                               );
                             }
                             if (!onlineLoading) {
                               return (
-                                <div className="px-2.5 py-1 text-muted-foreground text-xs rounded-full flex items-center gap-1 font-semibold border border-border bg-red-500">
-                                  {duration && <span className="opacity-80">[{duration}]</span>}
-                                  <WifiOff size={11} /> OFF
+                                <div className="flex flex-col items-center justify-center rounded-lg overflow-hidden min-w-[48px] bg-red-500 border border-border">
+                                  <div className="w-full text-center font-bold text-lg leading-tight px-2 pt-1.5 pb-0.5 text-white">
+                                    {duration ? duration : <WifiOff size={14} />}
+                                  </div>
+                                  <div className="w-full text-center font-semibold text-[9px] leading-tight px-2 pb-1.5 pt-0 uppercase tracking-wide text-white/90">
+                                    OFF
+                                  </div>
                                 </div>
                               );
                             }
