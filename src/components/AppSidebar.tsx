@@ -51,7 +51,7 @@ export function AppSidebar() {
       <SidebarHeader className="border-b border-border/40 pb-3">
         {!collapsed ?
         <div className="flex items-center gap-2 px-2 pt-1">
-            <img alt={APP_NAME} className="h-8 object-contain border-0" src="/lovable-uploads/4e634900-836e-43b2-9b54-04784b2974bb.png" />
+            <img alt={APP_NAME} className="h-8 object-contain border-0" src="/lovable-uploads/3dd4006b-d0a0-446c-8e7c-f782ce3142d8.png" />
           </div> :
 
         <div className="flex justify-center pt-1">
