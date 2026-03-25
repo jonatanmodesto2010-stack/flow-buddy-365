@@ -508,7 +508,7 @@ const Auth = () => {
           >
             {/* Logo */}
             <div className="flex justify-center mb-8">
-              <img src="/images/logo-provedor-ligado.png" alt="Provedor Ligado" className="h-36 drop-shadow-lg" />
+              <img src="/images/logo-provedor-ligado.png" alt="Provedor Ligado" className="h-20 drop-shadow-lg" />
             </div>
 
             {/* Title */}
