@@ -17,6 +17,7 @@ interface Integration {
   api_url_contracts: string | null;
   ixc_os_retirada_assunto_id: string | null;
   is_active: boolean;
+  sync_interval_minutes: number;
 }
 
 interface SyncProgress {
@@ -34,6 +35,7 @@ export const IntegrationsSettings = () => {
   const [apiToken, setApiToken] = useState('');
   const [apiUrlContracts, setApiUrlContracts] = useState('');
   const [osRetiradaAssuntoId, setOsRetiradaAssuntoId] = useState('');
+  const [syncInterval, setSyncInterval] = useState(10);
   const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -73,6 +75,7 @@ export const IntegrationsSettings = () => {
         setApiToken(data.api_token || '');
         setApiUrlContracts(data.api_url_contracts || '');
         setOsRetiradaAssuntoId(data.ixc_os_retirada_assunto_id || '');
+        setSyncInterval(data.sync_interval_minutes ?? 10);
         setIsActive(data.is_active);
       }
     } catch (err: any) {
@@ -182,6 +185,7 @@ export const IntegrationsSettings = () => {
             api_url_contracts: apiUrlContracts || null,
             ixc_os_retirada_assunto_id: osRetiradaAssuntoId || null,
             is_active: isActive,
+            sync_interval_minutes: syncInterval,
           })
           .eq('id', integration.id);
         if (error) throw error;
@@ -196,6 +200,7 @@ export const IntegrationsSettings = () => {
             api_url_contracts: apiUrlContracts || null,
             ixc_os_retirada_assunto_id: osRetiradaAssuntoId || null,
             is_active: isActive,
+            sync_interval_minutes: syncInterval,
           });
         if (error) throw error;
       }
@@ -374,6 +379,26 @@ export const IntegrationsSettings = () => {
             <p className="text-xs text-muted-foreground mt-1">Utilizado para buscar OS de retirada de equipamento no Dashboard</p>
           </div>
 
+          <div>
+            <label className="text-sm font-medium block mb-1">Intervalo de Sincronização Automática (minutos)</label>
+            <div className="flex items-center gap-3">
+              <Input 
+                type="number" 
+                min={1} 
+                max={1440} 
+                value={syncInterval} 
+                onChange={(e) => setSyncInterval(Math.max(1, Math.min(1440, parseInt(e.target.value) || 10)))} 
+                className="w-32"
+              />
+              <span className="text-sm text-muted-foreground">
+                {syncInterval < 60 
+                  ? `A cada ${syncInterval} minuto${syncInterval > 1 ? 's' : ''}` 
+                  : `A cada ${Math.floor(syncInterval / 60)}h${syncInterval % 60 > 0 ? ` ${syncInterval % 60}min` : ''}`}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Define o intervalo mínimo entre sincronizações automáticas via cron (1 a 1440 minutos)</p>
+          </div>
+
           <div className="flex flex-wrap gap-3 pt-2">
             <Button onClick={handleTestConnection} variant="outline" disabled={testing}>
               {testing && <Loader2 size={16} className="mr-2 animate-spin" />}
@@ -455,7 +480,7 @@ export const IntegrationsSettings = () => {
                   Contas a Receber
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">A sincronização automática ocorre a cada 10 minutos via cron. Inclui descoberta de clientes via contratos.</p>
+              <p className="text-xs text-muted-foreground">A sincronização automática ocorre conforme o intervalo configurado acima. Inclui descoberta de clientes via contratos.</p>
             </div>
           )}
         </div>
