@@ -32,93 +32,40 @@ const DashboardShowcase = () => (
     {/* Glow effect */}
     <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[120px]" />
 
-    {/* Dashboard mockup cards */}
-    <div className="relative z-10 w-full max-w-lg space-y-4">
-      {/* Top row - Stats cards */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/10">
-          <div className="flex items-center gap-2 mb-2">
-            <Users size={14} className="text-purple-300" />
-            <span className="text-[10px] text-purple-200/70 uppercase tracking-wider">Clientes</span>
-          </div>
-          <p className="text-xl font-bold text-white">1.248</p>
-          <p className="text-[10px] text-emerald-400 mt-1">+12% este mês</p>
-        </div>
-        <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/10">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp size={14} className="text-blue-300" />
-            <span className="text-[10px] text-purple-200/70 uppercase tracking-wider">Cobranças</span>
-          </div>
-          <p className="text-xl font-bold text-white">R$ 84k</p>
-          <p className="text-[10px] text-emerald-400 mt-1">+8% vs anterior</p>
-        </div>
-        <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/10">
-          <div className="flex items-center gap-2 mb-2">
-            <BarChart3 size={14} className="text-cyan-300" />
-            <span className="text-[10px] text-purple-200/70 uppercase tracking-wider">Taxa</span>
-          </div>
-          <p className="text-xl font-bold text-white">94.2%</p>
-          <p className="text-[10px] text-emerald-400 mt-1">Meta atingida</p>
-        </div>
-      </div>
+    {/* Logo */}
+    <div className="relative z-10 mb-8">
+      <img src="/images/logo-provedor-ligado.png" alt="Provedor Ligado" className="w-48 mx-auto drop-shadow-lg" />
+    </div>
 
-      {/* Chart card */}
-      <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/10">
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-xs text-purple-200/80 font-medium">Análise mensal</span>
-          <PieChart size={14} className="text-purple-300" />
-        </div>
-        {/* Fake bar chart */}
-        <div className="flex items-end gap-2 h-24">
-          {[60, 80, 45, 90, 70, 95, 55, 85, 75, 92, 68, 88].map((h, i) => (
-            <div
-              key={i}
-              className="flex-1 rounded-t-sm"
-              style={{
-                height: `${h}%`,
-                background: i === 5 || i === 9
-                  ? 'linear-gradient(to top, #8b5cf6, #a78bfa)'
-                  : 'rgba(255,255,255,0.15)',
-              }}
-            />
-          ))}
-        </div>
-        <div className="flex justify-between mt-2">
-          <span className="text-[9px] text-purple-200/50">Jan</span>
-          <span className="text-[9px] text-purple-200/50">Jun</span>
-          <span className="text-[9px] text-purple-200/50">Dez</span>
-        </div>
-      </div>
-
-      {/* Ranking table */}
-      <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/10">
-        <span className="text-xs text-purple-200/80 font-medium">Top operadores</span>
-        <div className="mt-3 space-y-2">
-          {['Ana Silva', 'Carlos Mendes', 'Julia Costa'].map((name, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <div className="w-6 h-6 rounded-full bg-purple-500/30 flex items-center justify-center text-[10px] text-white font-bold">
-                {i + 1}
-              </div>
-              <span className="text-xs text-white/80 flex-1">{name}</span>
-              <div className="h-1.5 w-20 bg-white/10 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-purple-500 to-blue-400"
-                  style={{ width: `${95 - i * 15}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+    {/* Floating screenshots */}
+    <div className="relative z-10 w-full max-w-2xl h-[420px]">
+      {/* Clients screenshot */}
+      <img
+        src="/images/showcase-clients.png"
+        alt="Gestão de Clientes"
+        className="absolute top-0 left-0 w-[55%] rounded-xl shadow-2xl border border-white/10 transform -rotate-2 hover:rotate-0 transition-transform duration-500"
+      />
+      {/* Calendar screenshot */}
+      <img
+        src="/images/showcase-calendar.png"
+        alt="Calendário de Ações"
+        className="absolute top-4 right-0 w-[50%] rounded-xl shadow-2xl border border-white/10 transform rotate-3 hover:rotate-0 transition-transform duration-500"
+      />
+      {/* Timeline screenshot */}
+      <img
+        src="/images/showcase-timeline.png"
+        alt="Timeline Completa"
+        className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[60%] rounded-xl shadow-2xl border border-white/10 transform rotate-1 hover:rotate-0 transition-transform duration-500"
+      />
     </div>
 
     {/* Marketing text */}
     <div className="relative z-10 mt-8 text-center max-w-md">
       <h2 className="text-2xl font-bold text-white mb-2">
-        Novo formato de análise de dados
+        Gestão inteligente de cobranças
       </h2>
       <p className="text-sm text-purple-200/70">
-        Gráficos interativos e filtros inteligentes que transformam seus dados em decisões
+        Controle de clientes, calendário de ações e timeline completa em um só lugar
       </p>
     </div>
   </div>
