@@ -1,82 +1,59 @@
 
 
-## Plano: Redesign da tela de login - Layout split SaaS moderno
+## Plano: Login com screenshots reais do sistema + logo Provedor Ligado
 
 ### Resumo
-Substituir o layout centralizado simples do `Auth.tsx` por um layout dividido em duas colunas: showcase visual à esquerda (60%) e formulário de login à direita (40%). Toda a lógica de autenticação permanece intacta.
+Substituir os mockups CSS do `DashboardShowcase` por screenshots reais das funcionalidades do sistema (cards de clientes, calendário, timeline) exibidos como imagens com efeito glassmorphism, e adicionar a logo "Provedor Ligado" no topo da coluna esquerda e no formulário de login.
 
-### Arquivo alterado
-- `src/pages/Auth.tsx` (único arquivo - apenas UI)
+### Arquivos alterados
+- `src/pages/Auth.tsx` — reescrever o `DashboardShowcase`
+- Copiar 4 imagens para `public/`:
+  - `user-uploads://image-54.png` → `public/images/showcase-clients.png`
+  - `user-uploads://image-55.png` → `public/images/showcase-calendar.png`
+  - `user-uploads://image-56.png` → `public/images/showcase-timeline.png`
+  - `user-uploads://image-57.png` → `public/images/logo-provedor-ligado.png`
 
-### Layout
+### Layout da coluna esquerda
 
 ```text
-┌──────────────────────────────┬────────────────────┐
-│                              │  🇧🇷 Português  ☀  │
-│   [Dashboard mockup visual]  │                    │
-│   Gráficos, cards, métricas  │   Logo (favicon)   │
-│   Fundo gradiente escuro     │                    │
-│   roxo/azul com estrelas     │  Entre em sua conta │
-│                              │  Subtítulo          │
-│                              │                    │
-│   "Novo formato de análise   │  [E-mail]           │
-│    de dados"                 │  [Senha]       👁   │
-│   "Gráficos interativos..." │                    │
-│                              │  ☐ Lembrar e-mail  │
-│           60%                │  Esqueceu senha?    │
-│                              │                    │
-│                              │  [ Entrar ]         │
-│                              │       40%           │
-└──────────────────────────────┴────────────────────┘
+┌─────────────────────────────────────┐
+│  [Logo Provedor Ligado]             │
+│                                     │
+│  ┌─────────┐  ┌─────────────────┐   │
+│  │ Clientes │  │   Calendário    │   │
+│  │ (img-54) │  │   (img-55)     │   │
+│  └─────────┘  └─────────────────┘   │
+│       ┌─────────────────────┐       │
+│       │  Timeline (img-56)  │       │
+│       └─────────────────────┘       │
+│                                     │
+│  "Gestão completa de cobranças"     │
+│  "Clientes, calendário, timeline"   │
+│  Fundo gradiente escuro + estrelas  │
+└─────────────────────────────────────┘
 ```
 
-### Detalhes da implementação
+### Detalhes
 
-**Coluna esquerda (hidden no mobile):**
-- `w-[60%]` com gradiente `from-[#0f0a2e] via-[#1a1145] to-[#0d1b3e]`
-- Pontos/estrelas decorativos via pseudo-elements CSS (pequenos circles absolutos com opacity)
-- Dashboard mockup: cards SVG/div simulando gráficos (donut chart, line chart, ranking table) com glassmorphism (`bg-white/10 backdrop-blur`)
-- Texto de marketing na parte inferior
-- Efeito de glow sutil via box-shadow radial
+**Imagens do sistema:**
+- Cada screenshot dentro de um container com `rounded-xl`, `shadow-2xl`, `border border-white/10`, leve rotação/tilt via `transform rotate` para efeito de profundidade
+- Sobreposição parcial entre imagens (absolute positioning) criando efeito de "floating cards"
+- Escala reduzida (~60-70% do tamanho original) para caber no espaço
 
-**Coluna direita:**
-- `w-[40%]` (100% no mobile), fundo `bg-card`
-- Topo direito: seletor de idioma estático (🇧🇷 Português) + botão toggle tema (já existe ThemeContext)
-- Logo: usar `/favicon.png` no topo
-- Título: "Entre em sua conta"
-- Subtítulo: "Gerencie seus clientes e operações com eficiência"
-- Inputs com estilo refinado: bordas arredondadas, focus glow via `ring-primary/50`
-- Campo senha com botão mostrar/ocultar (eye icon)
-- Checkbox "Lembrar e-mail" com localStorage
-- Link "Esqueceu sua senha?" alinhado à direita do checkbox
-- Botão "Entrar" com gradiente roxo e hover glow
+**Logo Provedor Ligado:**
+- Exibida no topo da coluna esquerda (centralizada, ~200px de largura)
+- Também substitui o ícone genérico de `BarChart3` no formulário de login à direita
 
-**Estados preservados:**
-- `isForgotPassword` → formulário de recuperação (na mesma coluna direita)
-- `isResetMode` → formulário de nova senha (na mesma coluna direita)
-- Toda lógica de `handleAuth`, `handleForgotPassword`, `handleResetPassword` permanece idêntica
+**Fundo:** mantém gradiente escuro + estrelas + glow (já existentes)
 
-**Responsividade (< 768px):**
-- Coluna esquerda: `hidden`
-- Coluna direita: `w-full`, centralizada, padding adequado
+**Texto de marketing:** atualizado para refletir as funcionalidades mostradas:
+- Título: "Gestão inteligente de cobranças"
+- Subtítulo: "Controle de clientes, calendário de ações e timeline completa em um só lugar"
 
-**Animações:**
-- `motion.div` fade-in no container direito
-- Inputs com `transition-all focus:ring-2 focus:ring-primary/50 focus:shadow-lg`
-- Botão com `hover:shadow-[0_0_20px_rgba(139,92,246,0.3)]`
-
-**Funcionalidade "Lembrar e-mail":**
-- State `rememberEmail` + `useEffect` para ler/gravar `localStorage.getItem('remembered_email')`
-- No submit bem-sucedido, salva ou limpa conforme checkbox
-
-**Toggle mostrar/ocultar senha:**
-- State `showPassword` boolean
-- Input type alternando entre `password` e `text`
-- Ícone `Eye` / `EyeOff` do lucide-react
+**Coluna direita:** sem mudanças na lógica, apenas troca o ícone do logo pela imagem `logo-provedor-ligado.png`
 
 ### O que NÃO muda
-- Lógica de autenticação (signIn, resetPassword, etc.)
-- Rotas
-- Validações (zod)
-- Nenhum outro arquivo do projeto
+- Toda lógica de autenticação
+- Responsividade (mobile esconde coluna esquerda)
+- Animações existentes
 
