@@ -472,6 +472,19 @@ Deno.serve(async (req) => {
       const { organization_id, api_url, api_token, api_url_contracts } = integration;
       if (!api_url || !api_token) continue;
 
+      // For cron: respect per-org sync_interval_minutes
+      if (action === 'cron') {
+        const intervalMinutes = integration.sync_interval_minutes || 10;
+        const lastSync = integration.last_sync_at ? new Date(integration.last_sync_at).getTime() : 0;
+        const lastBoletoSync = integration.last_boleto_sync_at ? new Date(integration.last_boleto_sync_at).getTime() : 0;
+        const latestSync = Math.max(lastSync, lastBoletoSync);
+        const elapsedMinutes = (Date.now() - latestSync) / 60000;
+        if (latestSync > 0 && elapsedMinutes < intervalMinutes) {
+          console.log(`[cron] Skipping org ${organization_id}: ${Math.round(elapsedMinutes)}min elapsed < ${intervalMinutes}min interval`);
+          continue;
+        }
+      }
+
       const token = encodeIxcToken(api_token);
       const orgResult: any = { organization_id, clients: 0, boletos: 0, errors: [] };
 

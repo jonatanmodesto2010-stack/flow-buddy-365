@@ -17,6 +17,7 @@ interface Integration {
   api_url_contracts: string | null;
   ixc_os_retirada_assunto_id: string | null;
   is_active: boolean;
+  sync_interval_minutes: number;
 }
 
 interface SyncProgress {
