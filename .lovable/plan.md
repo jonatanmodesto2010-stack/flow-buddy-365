@@ -1,58 +1,33 @@
 
 
-## Plano: Mover filtro de Filial para dentro dos Filtros Avançados
+## Problem Identified: Stale Closure in Auto-Reload
 
-### Problema
-O filtro de filial existe como um `<Select>` separado no header da página de Clientes (linha 512-525 de `Clients.tsx`), mas não aparece dentro do popover de Filtros Avançados do componente `ClientSearchFilters`. O usuário espera encontrá-lo no painel de filtros avançados.
+The auto-reload `useEffect` (line 330) captures a **stale version of `loadClients`** because its dependency array only includes `[organizationId]`. When the sync completes and calls `loadClients()`, it uses the filter values (`searchTerm`, `statusFilter`, `filialFilter`) from when the effect was first created -- not the current filter values.
 
-### Solução
-Adicionar o campo "Filial" dentro do popover de filtros avançados em `ClientSearchFilters`, e remover o `<Select>` standalone do header em `Clients.tsx`.
+This means:
+- User sets filters (e.g. Status: Bloqueados) -- UI badges update correctly
+- Auto-sync completes, triggers `loadClients()` with **old/default filter values** (statusFilter='all')
+- Result: 1649 clients loaded ignoring the active filters, even though the filter badges still show correctly
 
-### Arquivos alterados
+## Fix
 
-#### 1. `src/hooks/useOrganizationFilters.tsx`
-- Adicionar `filialFilter: string` ao `FilterValues` interface (default: `'all'`)
-- Adicionar ao `DEFAULT_FILTERS`
+Store `loadClients` in a ref so the auto-reload effect always calls the latest version.
 
-#### 2. `src/components/ClientSearchFilters.tsx`
-- Receber `filiais: [string, string][]` como prop
-- Adicionar um `<Select>` de "Filial" no popover, entre Status e Ordenação
-- Incluir `filialFilter !== 'all'` no `activeFiltersCount`
-- Adicionar badge ativo para filial no display de filtros ativos
+### File: `src/pages/Clients.tsx`
 
-#### 3. `src/pages/Clients.tsx`
-- Remover o `<Select>` de filial standalone do header (linhas 512-525)
-- Remover o state `filialFilter` local — usar o valor vindo do `onFilterChange`
-- Passar `filiais` como prop para `<ClientSearchFilters>`
-- Ler `filialFilter` dos filtros retornados pelo callback `onFilterChange`
+1. Add a `loadClientsRef` that always points to the current `loadClients` function
+2. Update the auto-reload `useEffect` to call `loadClientsRef.current()` instead of `loadClients()`
 
-### Detalhes técnicos
-
-**Nova prop em ClientSearchFilters:**
-```ts
-interface ClientSearchFiltersProps {
-  onFilterChange: (filters: FilterValues) => void;
-  organizationId: string | null;
-  pageName: string;
-  filiais?: [string, string][]; // novo
-}
-```
-
-**Novo campo no popover (após Status, antes de Ordenação):**
 ```text
-Filial
-[Select: Todas filiais / filial1 / filial2 / ...]
+// Add after loadClients definition (~line 218):
+const loadClientsRef = useRef(loadClients);
+loadClientsRef.current = loadClients;
+
+// In the auto-reload useEffect (line 354), change:
+//   loadClients();
+// to:
+//   loadClientsRef.current();
 ```
 
-Só renderiza se `filiais.length > 0`.
-
-**Badge ativo:**
-```text
-Filial: <nome_da_filial> [X]
-```
-
-### O que NÃO muda
-- Lógica de carregamento de filiais (`loadFiliais` em Clients.tsx)
-- Query de filtragem por `ixc_filial_id`
-- Outras páginas (Dashboard mantém seu filtro próprio)
+This is a minimal, targeted fix -- only 3 lines changed. The filter state will be correctly applied even when the auto-reload triggers after a sync.
 
