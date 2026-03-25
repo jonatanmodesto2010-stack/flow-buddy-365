@@ -309,6 +309,9 @@ const Clients = () => {
     }
   };
 
+  const loadClientsRef = useRef(loadClients);
+  loadClientsRef.current = loadClients;
+
 
   useEffect(() => {
     setCurrentPage(1);
