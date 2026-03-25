@@ -512,9 +512,7 @@ const Auth = () => {
           >
             {/* Logo */}
             <div className="flex justify-center mb-8">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600 to-purple-400 flex items-center justify-center shadow-lg shadow-purple-500/20">
-                <BarChart3 size={24} className="text-white" />
-              </div>
+              <img src="/images/logo-provedor-ligado.png" alt="Provedor Ligado" className="h-12 drop-shadow-lg" />
             </div>
 
             {/* Title */}
