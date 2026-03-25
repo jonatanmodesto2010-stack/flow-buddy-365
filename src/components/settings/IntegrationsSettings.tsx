@@ -200,6 +200,7 @@ export const IntegrationsSettings = () => {
             api_url_contracts: apiUrlContracts || null,
             ixc_os_retirada_assunto_id: osRetiradaAssuntoId || null,
             is_active: isActive,
+            sync_interval_minutes: syncInterval,
           });
         if (error) throw error;
       }
